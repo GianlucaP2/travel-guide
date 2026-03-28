@@ -1,0 +1,204 @@
+# Automated backend deployment — travel-guide
+#
+# Triggers on every push to master that touches backend/ code.
+# Builds an ARM64 Docker image, ships it to both Jetson nodes via Tailscale,
+# imports it into k3s, applies the manifest, rolls out the deployment,
+# and verifies /api/health is green.
+#
+# Required GitHub secrets (repo Settings → Secrets and variables → Actions → Secrets):
+#   SSH_PRIVATE_KEY    — contents of ~/.ssh/id_ed25519 (include -----BEGIN/END----- lines)
+#   TAILSCALE_AUTHKEY  — reusable+ephemeral key from tailscale.com/admin/settings/keys
+#
+# How to add SSH_PRIVATE_KEY:
+#   cat ~/.ssh/id_ed25519 | gh secret set SSH_PRIVATE_KEY -R GianlucaP2/travel-guide
+#
+# How to add TAILSCALE_AUTHKEY:
+#   tailscale.com → Admin → Settings → Keys → Generate auth key
+#   ☑ Reusable  ☑ Ephemeral
+#   echo "tskey-auth-..." | gh secret set TAILSCALE_AUTHKEY -R GianlucaP2/travel-guide
+
+name: Deploy Backend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "backend/**"
+      - "k8s/**"
+      - ".github/workflows/deploy-backend.yml"
+
+  # Manual trigger — useful for config/secret changes that don't touch code
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: "Skip image build and just restart pods"
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    name: Build → Push → Restart → Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      MASTER_IP:  "100.90.225.120"
+      WORKER_IP:  "100.87.185.47"
+      SSH_USER:   "gianluca"
+      NAMESPACE:  "travel-guide"
+      IMAGE_NAME: "travel-guide-api"
+      REGISTRY:   "192.168.1.119:5000"
+      DEPLOYMENT: "api"
+      HEALTH_URL: "http://192.168.1.119:30802/api/health"
+      K3S_SOCK:   "/run/k3s/containerd/containerd.sock"
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Build ARM64 image ─────────────────────────────────────────────────
+      - name: Set up QEMU (ARM64 emulation)
+        if: ${{ !inputs.skip_build }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: ${{ !inputs.skip_build }}
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image → tar archive
+        if: ${{ !inputs.skip_build }}
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            --tag ${{ env.IMAGE_NAME }}:latest \
+            --output type=docker,dest=/tmp/${{ env.IMAGE_NAME }}.tar \
+            ./backend
+          echo "Image size: $(du -sh /tmp/${{ env.IMAGE_NAME }}.tar | cut -f1)"
+
+      # ── 3. Connect to Tailscale mesh ─────────────────────────────────────────
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          args: "--hostname=gh-actions-deploy"
+
+      # ── 4. Set up SSH and wait for nodes ──────────────────────────────────────
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          for NODE in ${{ env.MASTER_IP }} ${{ env.WORKER_IP }}; do
+            echo -n "Waiting for $NODE..."
+            for i in $(seq 1 30); do
+              if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 \
+                     -i ~/.ssh/deploy_key \
+                     ${{ env.SSH_USER }}@$NODE 'echo ok' &>/dev/null; then
+                echo " reachable ✓"
+                break
+              fi
+              sleep 1
+              if [ $i -eq 30 ]; then
+                echo " TIMEOUT — node unreachable after 30s"
+                exit 1
+              fi
+            done
+          done
+
+      # ── 5. Import image on master → push to local registry ──────────────────
+      # The registry:2 pod runs on master (pinned), backed by the SSD.
+      # The worker pulls from the registry over LAN on demand.
+      - name: Import image → push to registry
+        if: ${{ !inputs.skip_build }}
+        run: |
+          echo "Streaming image to master and pushing to registry (${{ env.REGISTRY }})..."
+          cat /tmp/${{ env.IMAGE_NAME }}.tar | \
+            ssh -o StrictHostKeyChecking=no \
+                -i ~/.ssh/deploy_key \
+                ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+                "sudo k3s ctr -a ${{ env.K3S_SOCK }} images import - && \
+                 sudo k3s ctr -a ${{ env.K3S_SOCK }} images tag \
+                   docker.io/library/${{ env.IMAGE_NAME }}:latest \
+                   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest && \
+                 sudo k3s ctr -a ${{ env.K3S_SOCK }} images push \
+                   --plain-http \
+                   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "Registry push ✓ — worker will pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest on rollout"
+
+      # ── 6. Apply k8s manifests ───────────────────────────────────────────────
+      - name: Apply namespace and secrets
+        run: |
+          for f in k8s/00-namespace.yaml k8s/01-secrets.yaml k8s/06-cloudflare-tunnel.yaml; do
+            cat "$f" | \
+              ssh -o StrictHostKeyChecking=no \
+                  -i ~/.ssh/deploy_key \
+                  ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+                  "sudo k3s kubectl apply -f -"
+          done
+
+      - name: Apply API manifest
+        run: |
+          cat k8s/05-api.yaml | \
+            ssh -o StrictHostKeyChecking=no \
+                -i ~/.ssh/deploy_key \
+                ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+                "sudo k3s kubectl apply -f -"
+
+      # ── 7. Rolling restart ───────────────────────────────────────────────────
+      - name: Rollout restart
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/deploy_key \
+              ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+              "sudo k3s kubectl rollout restart deployment/${{ env.DEPLOYMENT }} \
+                 -n ${{ env.NAMESPACE }}"
+
+      - name: Wait for rollout
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/deploy_key \
+              ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+              "sudo k3s kubectl rollout status deployment/${{ env.DEPLOYMENT }} \
+                 -n ${{ env.NAMESPACE }} --timeout=120s"
+
+      # ── 8. Health check ──────────────────────────────────────────────────────
+      - name: Health check
+        run: |
+          sleep 3
+          RESULT=$(ssh -o StrictHostKeyChecking=no \
+                       -i ~/.ssh/deploy_key \
+                       ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+                       "curl -sf ${{ env.HEALTH_URL }}")
+          echo "Response: $RESULT"
+          echo "$RESULT" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('status') == 'healthy', f'Unexpected: {d}'
+          print('Health check passed ✓')
+          "
+
+      # ── 9. Summary (always runs) ─────────────────────────────────────────────
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  travel-guide backend deploy"
+          echo "  Commit : ${{ github.sha }}"
+          echo "  Ref    : ${{ github.ref_name }}"
+          echo "  By     : ${{ github.actor }}"
+          echo "  Skipped build: ${{ inputs.skip_build || 'false' }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          TUNNEL=$(ssh -o StrictHostKeyChecking=no \
+                       -o ConnectTimeout=5 \
+                       -i ~/.ssh/deploy_key \
+                       ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
+                       "sudo k3s kubectl logs -n ${{ env.NAMESPACE }} deploy/cloudflared 2>/dev/null \
+                        | grep -o 'https://[^ ]*trycloudflare[^ ]*' | tail -1" 2>/dev/null \
+                   || echo "(unavailable)")
+          echo "  Tunnel : $TUNNEL"
+          echo "  LAN    : ${{ env.HEALTH_URL }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

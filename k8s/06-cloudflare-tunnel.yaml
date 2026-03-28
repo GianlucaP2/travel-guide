@@ -1,0 +1,78 @@
+# ==============================================================================
+# Cloudflare Tunnel — external access
+#
+# CURRENT MODE: anonymous tunnel (--url)
+#   URL changes every time cloudflared restarts. Fine for dev / demos.
+#   No account, no token, no domain needed.
+#
+# TO SWITCH TO PRODUCTION (named tunnel, stable domain):
+#   1. cloudflared tunnel login
+#   2. cloudflared tunnel create travel-guide-api
+#   3. CF Zero Trust dashboard → Tunnels → travel-guide-api → Public Hostname:
+#        api.YOURDOMAIN.COM → http://api.travel-guide.svc.cluster.local:3001
+#   4. cloudflared tunnel token travel-guide-api  → paste in the Secret below
+#   5. Comment out the --url args block, uncomment the named-tunnel block
+#   6. kubectl apply -f 06-cloudflare-tunnel.yaml
+# ==============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-tunnel-token
+  namespace: travel-guide
+type: Opaque
+stringData:
+  # Not used in anonymous mode. Fill in when switching to named tunnel.
+  token: "PASTE_CLOUDFLARE_TUNNEL_TOKEN_HERE"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: travel-guide
+  labels:
+    app: cloudflared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: gianluca-desktop
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:latest
+          imagePullPolicy: IfNotPresent
+
+          # ── ANONYMOUS TUNNEL (current) ──────────────────────────────────────
+          # URL is printed in cloudflared logs on startup; changes on every restart.
+          args:
+            - tunnel
+            - --no-autoupdate
+            - --url
+            - http://api.travel-guide.svc.cluster.local:3001
+
+          # ── NAMED TUNNEL (production) ───────────────────────────────────────
+          # Uncomment below and remove the anonymous args block above.
+          # args:
+          #   - tunnel
+          #   - --no-autoupdate
+          #   - run
+          # env:
+          #   - name: TUNNEL_TOKEN
+          #     valueFrom:
+          #       secretKeyRef:
+          #         name: cloudflare-tunnel-token
+          #         key: token
+
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
