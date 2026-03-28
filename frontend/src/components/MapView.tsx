@@ -9,6 +9,7 @@ import {
   useMap,
   ZoomControl,
 } from 'react-leaflet';
+import { useWikipediaData } from '../hooks/useWikipediaData';
 import L from 'leaflet';
 import { POI } from '../types';
 import { GPSState } from '../types';
@@ -146,27 +147,44 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps }: MapView
 // ── Compact popup card inside the Leaflet popup ──────────────────────────────
 function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
   const tierLabels: Record<number, string> = { 1: 'Must-See', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
+  const wiki = useWikipediaData(poi.name, poi.region);
+
   return (
-    <div className="p-3 min-w-[220px] max-w-[280px]">
-      <div className="flex items-start gap-2 mb-2">
-        <span className="text-2xl">{CATEGORY_EMOJI[poi.category]}</span>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm leading-tight text-white pr-4">{poi.name}</div>
-          <div className="text-xs mt-0.5" style={{ color: tierColor(poi.tier) }}>
-            {'★'.repeat(5 - poi.tier)}{'☆'.repeat(poi.tier - 1)} {tierLabels[poi.tier]}
+    <div className="min-w-[220px] max-w-[280px] overflow-hidden">
+      {/* Wikipedia thumbnail */}
+      <div className="w-full h-28 bg-white/5 overflow-hidden relative -mx-[1px] -mt-[1px] mb-3 rounded-t-[7px]">
+        {wiki.loading && <div className="absolute inset-0 animate-pulse bg-white/5" />}
+        {wiki.imageUrl && (
+          <img src={wiki.imageUrl} alt={poi.name} className="w-full h-full object-cover" loading="lazy" />
+        )}
+        {!wiki.loading && !wiki.imageUrl && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-20">
+            <span className="text-4xl">{CATEGORY_EMOJI[poi.category]}</span>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+      </div>
+      <div className="p-3 pt-0">
+        <div className="flex items-start gap-2 mb-2">
+          <span className="text-2xl">{CATEGORY_EMOJI[poi.category]}</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm leading-tight text-white pr-4">{poi.name}</div>
+            <div className="text-xs mt-0.5" style={{ color: tierColor(poi.tier) }}>
+              {'★'.repeat(5 - poi.tier)}{'☆'.repeat(poi.tier - 1)} {tierLabels[poi.tier]}
+            </div>
           </div>
         </div>
-      </div>
-      <p className="text-xs text-gray-300 leading-relaxed line-clamp-3 mb-3">{poi.description}</p>
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-gray-500">{poi.region}</span>
-        <button
-          onClick={onExpand}
-          className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
-          style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
-        >
-          Details →
-        </button>
+        <p className="text-xs text-gray-300 leading-relaxed line-clamp-3 mb-3">{poi.description}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-gray-500">{poi.region}</span>
+          <button
+            onClick={onExpand}
+            className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
+            style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
+          >
+            Details →
+          </button>
+        </div>
       </div>
     </div>
   );

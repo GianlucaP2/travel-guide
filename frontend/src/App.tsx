@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { POI } from './types';
 import { useGPS } from './hooks/useGPS';
 import { usePOIs } from './hooks/usePOIs';
+import { useProximityNotifications } from './hooks/useProximityNotifications';
 import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
 import POIDetail from './components/POIDetail';
@@ -16,6 +17,9 @@ export default function App() {
     pois, filtered, filters, loading, error,
     toggleCategory, toggleTier, toggleRegion, setSearch, clearFilters,
   } = usePOIs();
+
+  // Fire browser notifications when approaching a POI (1 km radius)
+  useProximityNotifications(filtered, gps);
 
   const handleSelectPOI = useCallback((poi: POI | null) => {
     setSelectedPOI(poi);
