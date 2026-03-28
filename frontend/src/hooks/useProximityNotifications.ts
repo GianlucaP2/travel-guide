@@ -9,6 +9,15 @@ const TIER_LABEL: Record<number, string> = {
   4: 'If passing by',
 };
 
+/** Alert when this many driving minutes away. */
+const ALERT_MINUTES = 10;
+/** Fallback speed when GPS reports nothing (highway cruise). */
+const FALLBACK_SPEED_KMH = 80;
+/** Never shrink the alert bubble below this (parked / slow traffic). */
+const MIN_RADIUS_M = 3_000;
+/** Cap so we don't alert for attractions across the county. */
+const MAX_RADIUS_M = 25_000;
+
 /** Haversine distance in metres between two coordinates. */
 function haversineMeters(
   lat1: number, lng1: number,
@@ -30,18 +39,18 @@ function formatDist(m: number): string {
 }
 
 /**
- * Fires a browser notification whenever the user comes within `radiusMeters`
- * of an unvisited POI. Requests Notification permission automatically
- * the first time GPS tracking is enabled.
+ * Fires a browser notification when the user is ~10 driving minutes away from
+ * a POI. The alert radius shrinks/grows with the live GPS speed so the warning
+ * always arrives roughly ALERT_MINUTES minutes before arrival.
+ * Clicking the notification launches Google Maps with turn-by-turn navigation
+ * already running, destination pre-set.
  *
- * @param pois          List of POIs to watch (filtered is fine)
- * @param gps           Live GPS state from useGPS
- * @param radiusMeters  Alert radius — defaults to 1 000 m (1 km)
+ * @param pois  List of POIs to watch (use the filtered set from usePOIs)
+ * @param gps   Live GPS state from useGPS
  */
 export function useProximityNotifications(
   pois: POI[],
   gps: GPSState,
-  radiusMeters = 1_000,
 ): void {
   const notifiedRef = useRef<Set<string>>(new Set());
   const permissionRef = useRef<NotificationPermission>(
@@ -66,27 +75,45 @@ export function useProximityNotifications(
     if (typeof Notification === 'undefined') return;
     if (permissionRef.current !== 'granted') return;
 
+    const userLat = gps.lat;
+    const userLng = gps.lng;
+    if (userLat === null || userLng === null) return;
+
+    // Compute alert radius from live speed (10 min ahead at current pace).
+    const speedMps =
+      gps.speed !== null && gps.speed > 0.5
+        ? gps.speed
+        : FALLBACK_SPEED_KMH / 3.6;
+    const alertRadius = Math.max(
+      MIN_RADIUS_M,
+      Math.min(MAX_RADIUS_M, speedMps * ALERT_MINUTES * 60),
+    );
+
     for (const poi of pois) {
       if (notifiedRef.current.has(poi.id)) continue;
 
-      const dist = haversineMeters(gps.lat, gps.lng, poi.lat, poi.lng);
-      if (dist > radiusMeters) continue;
+      const dist = haversineMeters(userLat, userLng, poi.lat, poi.lng);
+      if (dist > alertRadius) continue;
 
       notifiedRef.current.add(poi.id);
 
-      // ETA: use live GPS speed if available and plausible, else assume 50 km/h
-      const speedMps =
-        gps.speed !== null && gps.speed > 0.5 ? gps.speed : 50 / 3.6;
+      // ETA using the same speed we used for the alert radius.
       const etaMin = Math.max(1, Math.round(dist / speedMps / 60));
 
       const icon = CATEGORY_EMOJI[poi.category] ?? '📍';
-      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}`;
+      // dir_action=navigate starts turn-by-turn immediately — no tap needed.
+      const mapsUrl =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${userLat},${userLng}` +
+        `&destination=${poi.lat},${poi.lng}` +
+        `&travelmode=driving` +
+        `&dir_action=navigate`;
 
       const n = new Notification(`${icon} ${poi.name}`, {
         body: [
-          `${formatDist(dist)} away · ~${etaMin} min`,
+          `~${etaMin} min ahead · ${formatDist(dist)}`,
           TIER_LABEL[poi.tier],
-          'Tap for turn-by-turn directions →',
+          'Tap to start navigation →',
         ].join('\n'),
         tag: `proximity-${poi.id}`,
         // Keep Tier-1 & 2 notifications visible until dismissed
@@ -98,7 +125,7 @@ export function useProximityNotifications(
         n.close();
       };
     }
-  }, [gps.lat, gps.lng, gps.tracking, pois, radiusMeters]);
+  }, [gps.lat, gps.lng, gps.speed, gps.tracking, pois]);
 
   // ── Clear the notified set when GPS stops (new session = fresh alerts) ────
   useEffect(() => {
