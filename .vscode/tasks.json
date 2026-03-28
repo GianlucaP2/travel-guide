@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Backend: dev server",
+			"type": "shell",
+			"command": "cd /Users/gianluca/DEV/travel-guide/backend && npm run dev",
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Frontend: dev server",
+			"type": "shell",
+			"command": "cd /Users/gianluca/DEV/travel-guide/frontend && npm run dev",
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

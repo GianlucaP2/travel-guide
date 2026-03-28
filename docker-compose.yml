@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      PORT: "3001"
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","https://travel-guide.pages.dev"]'
+      CORS_ORIGIN_REGEX: '(http://localhost(:\d+)?)|(https://[\w-]+\.trycloudflare\.com)|(https://[\w-]+\.pages\.dev)'
+    ports:
+      - "3002:3001"
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://backend:3001
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes: {}
