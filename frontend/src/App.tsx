@@ -13,7 +13,7 @@ export default function App() {
 
   const { gps, startTracking, stopTracking, setFollowing } = useGPS();
   const {
-    pois, filtered, filters,
+    pois, filtered, filters, loading, error,
     toggleCategory, toggleTier, toggleRegion, setSearch, clearFilters,
   } = usePOIs();
 
@@ -53,6 +53,23 @@ export default function App() {
 
       {/* ── Map area ────────────────────────────────────────────────── */}
       <div className="flex-1 relative">
+        {/* API loading / error overlay */}
+        {(loading || error) && (
+          <div className="absolute inset-x-0 top-16 z-[1100] flex justify-center pointer-events-none px-4">
+            {loading && (
+              <div className="glass border border-white/10 rounded-xl px-4 py-2 flex items-center gap-2">
+                <span className="animate-spin text-base">⏳</span>
+                <span className="text-sm text-gray-300">Loading points of interest…</span>
+              </div>
+            )}
+            {error && (
+              <div className="glass border border-red-500/40 rounded-xl px-4 py-2 flex items-center gap-2 pointer-events-auto">
+                <span className="text-base">⚠️</span>
+                <span className="text-sm text-red-400">{error}</span>
+              </div>
+            )}
+          </div>
+        )}
         <MapView
           pois={filtered}
           selectedPOI={selectedPOI}

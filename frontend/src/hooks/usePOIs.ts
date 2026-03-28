@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { POI, Category, Tier, Region } from '../types';
-import { POIS } from '../data/pois';
 
 export interface Filters {
   categories: Set<Category>;
@@ -16,10 +15,31 @@ const DEFAULT_FILTERS: Filters = {
   search: '',
 };
 
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
+
 export function usePOIs() {
-  const [pois] = useState<POI[]>(POIS);
+  const [pois, setPois] = useState<POI[]>([]);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/pois`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<POI[]>;
+      })
+      .then(data => {
+        setPois(data);
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Failed to load POIs:', err);
+        setError('Failed to load points of interest. Please try again later.');
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = useMemo(() => {
     return pois.filter(p => {
@@ -74,6 +94,7 @@ export function usePOIs() {
     filtered,
     filters,
     loading,
+    error,
     toggleCategory,
     toggleTier,
     toggleRegion,
