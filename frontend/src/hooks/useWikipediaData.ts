@@ -33,6 +33,8 @@ export function useWikipediaData(
 
     async function fetchData() {
       let page: Record<string, unknown> | null = null;
+
+      // ── Step 1: direct REST API lookup ────────────────────────────
       try {
         const r = await fetch(
           'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(poiName.replace(/ /g, '_')),
@@ -41,17 +43,42 @@ export function useWikipediaData(
         if (r.ok) page = await r.json() as Record<string, unknown>;
       } catch { /* ignore */ }
 
+      // ── Step 2: strip parenthetical qualifier, try clean name ─────
+      // e.g. "Guelaguetza (Oaxacan)" → "Guelaguetza"
+      // e.g. "Point Dume (Planet of the Apes Cliffs)" → "Point Dume"
+      if (!page) {
+        const cleanName = poiName.replace(/\s*\([^)]+\)/g, '').trim();
+        if (cleanName.length > 2 && cleanName !== poiName) {
+          try {
+            const r = await fetch(
+              'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(cleanName.replace(/ /g, '_')),
+              { headers: { Accept: 'application/json' } },
+            );
+            if (r.ok) page = await r.json() as Record<string, unknown>;
+          } catch { /* ignore */ }
+        }
+      }
+
+      // ── Step 3: search fallback (validate title is relevant) ──────
+      // Only accept a search result whose title contains the first
+      // meaningful word of the POI name — prevents wrong articles
+      // (e.g. "Bestia Arts District" returning "Santiago Segura")
       if (!page) {
         try {
+          const firstWord = poiName.split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g, '');
           const sr = await fetch(
             'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
-            encodeURIComponent(poiName + ' ' + region) + '&srlimit=1&format=json&origin=*',
+            encodeURIComponent(poiName + ' ' + region) + '&srlimit=3&format=json&origin=*',
           );
           const sd = await sr.json() as { query?: { search?: { title?: string }[] } };
-          const title = sd?.query?.search?.[0]?.title;
-          if (title) {
+          const results = sd?.query?.search ?? [];
+          // Pick first result whose title contains the POI's first word
+          const best = results.find(res =>
+            res.title?.toLowerCase().includes(firstWord),
+          );
+          if (best?.title) {
             const pr = await fetch(
-              'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title),
+              'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(best.title),
               { headers: { Accept: 'application/json' } },
             );
             if (pr.ok) page = await pr.json() as Record<string, unknown>;

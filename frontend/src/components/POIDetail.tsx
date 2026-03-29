@@ -41,8 +41,14 @@ export default function POIDetail({ poi, onClose }: POIDetailProps) {
           <img src={wiki.imageUrl} alt={poi.name} className="w-full h-full object-cover" loading="lazy" />
         )}
         {!wiki.loading && !wiki.imageUrl && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-15">
-            <span className="text-6xl">{CATEGORY_EMOJI[poi.category]}</span>
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+            style={{ background: `linear-gradient(135deg, ${color}18 0%, transparent 60%)` }}
+          >
+            <span className="text-5xl drop-shadow-lg">{CATEGORY_EMOJI[poi.category]}</span>
+            <span className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: color + '99' }}>
+              {CATEGORY_LABEL[poi.category]}
+            </span>
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
