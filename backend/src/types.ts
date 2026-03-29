@@ -32,7 +32,15 @@ export type Region =
   | 'Santa Barbara'
   | 'Ventura'
   | 'Malibu'
-  | 'Santa Monica / LA';
+  | 'Santa Monica / LA'
+  | 'Los Angeles'
+  | 'Hollywood'
+  | 'West Hollywood'
+  | 'Downtown LA'
+  | 'Arts District'
+  | 'Los Feliz / Silver Lake'
+  | 'Joshua Tree'
+  | 'Palm Springs';
 
 export interface POI {
   id: string;

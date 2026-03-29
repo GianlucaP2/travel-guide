@@ -13,7 +13,7 @@ import { useWikipediaData } from '../hooks/useWikipediaData';
 import L from 'leaflet';
 import { POI } from '../types';
 import { GPSState } from '../types';
-import { HWY1_ROUTE } from '../data/route';
+import { useHwy1Route } from '../hooks/useHwy1Route';
 import { CATEGORY_EMOJI, tierColor } from '../utils/markers';
 
 // ── Fix Leaflet default icon paths ──────────────────────────────────────────
@@ -88,6 +88,8 @@ interface MapViewProps {
 }
 
 export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFollowing }: MapViewProps) {
+  const { route, loading } = useHwy1Route();
+
   return (
     <MapContainer
       center={[37.0, -121.9]}
@@ -105,14 +107,14 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
 
       <ZoomControl position="bottomright" />
 
-      {/* Hwy 1 route polyline */}
+      {/* Hwy 1 / PCH route polyline — road-snapped geometry from OSRM */}
       <Polyline
-        positions={HWY1_ROUTE}
+        positions={route}
         pathOptions={{
           color: '#60a5fa',
-          weight: 3,
-          opacity: 0.65,
-          dashArray: '10 6',
+          weight: loading ? 2 : 3,
+          opacity: loading ? 0.35 : 0.7,
+          dashArray: loading ? '6 8' : undefined,
         }}
       />
 
