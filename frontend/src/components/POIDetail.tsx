@@ -13,13 +13,14 @@ export default function POIDetail({ poi, onClose }: POIDetailProps) {
   const wiki = useWikipediaData(poi.name, poi.region, poi.lat, poi.lng);
   const [wikiExpanded, setWikiExpanded] = useState(false);
 
-  // "View on Map" = exact pin at POI coords (no routing, just shows the place)
-  const mapsViewUrl =
-    `https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`;
-  // "Route There" = navigation from current location, starts immediately
+  // Use the stored address or "Name, Region, CA" so Google Maps opens the named place
+  const mapsQuery = encodeURIComponent(poi.address ?? `${poi.name}, ${poi.region}, CA`);
+  // "View on Map" = find the named place in Google Maps
+  const mapsViewUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+  // "Route There" = navigation from current location to the named place
   const mapsRouteUrl =
     `https://www.google.com/maps/dir/?api=1` +
-    `&destination=${poi.lat},${poi.lng}` +
+    `&destination=${mapsQuery}` +
     `&travelmode=driving` +
     `&dir_action=navigate`;
 

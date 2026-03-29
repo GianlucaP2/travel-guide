@@ -9,7 +9,6 @@ import {
   useMap,
   ZoomControl,
 } from 'react-leaflet';
-import { useWikipediaData } from '../hooks/useWikipediaData';
 import L from 'leaflet';
 import { POI } from '../types';
 import { GPSState } from '../types';
@@ -158,21 +157,12 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
 // ── Compact popup card inside the Leaflet popup ──────────────────────────────
 function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
   const tierLabels: Record<number, string> = { 1: 'Must-See', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
-  const wiki = useWikipediaData(poi.name, poi.region, poi.lat, poi.lng);
 
   return (
     <div className="min-w-[220px] max-w-[280px] overflow-hidden">
-      {/* Wikipedia thumbnail */}
-      <div className="w-full h-28 bg-white/5 overflow-hidden relative -mx-[1px] -mt-[1px] mb-3 rounded-t-[7px]">
-        {wiki.loading && <div className="absolute inset-0 animate-pulse bg-white/5" />}
-        {wiki.imageUrl && (
-          <img src={wiki.imageUrl} alt={poi.name} className="w-full h-full object-cover" loading="lazy" />
-        )}
-        {!wiki.loading && !wiki.imageUrl && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-20">
-            <span className="text-4xl">{CATEGORY_EMOJI[poi.category]}</span>
-          </div>
-        )}
+      {/* Category emoji header — no Wikipedia fetch here (would fire for all 145 markers on mount) */}
+      <div className="w-full h-16 bg-white/5 overflow-hidden relative -mx-[1px] -mt-[1px] mb-3 rounded-t-[7px] flex items-center justify-center">
+        <span className="text-4xl opacity-70">{CATEGORY_EMOJI[poi.category]}</span>
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
       <div className="p-3 pt-0">
