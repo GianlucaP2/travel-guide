@@ -127,7 +127,7 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
             click: () => onSelectPOI(poi),
           }}
         >
-          <Popup>
+          <Popup minWidth={220} maxWidth={280}>
             <POIPopup poi={poi} onExpand={() => onSelectPOI(poi)} />
           </Popup>
         </Marker>

@@ -57,6 +57,18 @@
   right: 8px !important;
   top: 8px !important;
 }
+/* Remove Leaflet's inner content margin/padding so the popup card fills edge-to-edge */
+.leaflet-popup-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  line-height: normal !important;
+}
+/* Ensure anchor tags inside popups are not stripped of pointer events */
+.leaflet-popup-content a {
+  pointer-events: all !important;
+}
 
 /* ── Tier marker styles ──────────────────────────────────────────── */
 .poi-marker {
