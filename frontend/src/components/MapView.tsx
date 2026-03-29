@@ -190,13 +190,13 @@ function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
           <span className="text-[11px] text-gray-500">{poi.region}</span>
           <div className="flex gap-1">
             <a
-              href={`https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`}
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(poi.address ?? poi.name + ', ' + poi.region + ', CA')}`}
               target="_blank" rel="noopener noreferrer"
               className="text-xs px-2 py-1 rounded-lg font-medium transition-colors"
               style={{ background: '#ffffff18', color: '#9ca3af', border: '1px solid #ffffff22' }}
             >📍</a>
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}&travelmode=driving&dir_action=navigate`}
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(poi.address ?? poi.name + ', ' + poi.region + ', CA')}&travelmode=driving&dir_action=navigate`}
               target="_blank" rel="noopener noreferrer"
               className="text-xs px-2 py-1 rounded-lg font-medium transition-colors"
               style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
