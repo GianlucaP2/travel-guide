@@ -98,10 +98,11 @@ export function useProximityNotifications(
       const etaMin = Math.max(1, Math.round(dist / speedMps / 60));
       const icon = CATEGORY_EMOJI[poi.category] ?? '\U0001F4CD';
 
+      const dest = encodeURIComponent(poi.address ?? poi.name + ', ' + poi.region + ', CA');
       const mapsUrl =
         'https://www.google.com/maps/dir/?api=1' +
         '&origin=' + userLat + ',' + userLng +
-        '&destination=' + poi.lat + ',' + poi.lng +
+        '&destination=' + dest +
         '&travelmode=driving&dir_action=navigate';
 
       const alert: ProximityAlert = {

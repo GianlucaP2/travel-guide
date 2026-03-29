@@ -64,7 +64,7 @@ export default function NotificationToast({ alerts, onDismiss }: Props) {
             {/* Action buttons */}
             <div className="flex border-t border-white/5">
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${alert.poi.lat},${alert.poi.lng}`}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(alert.poi.address ?? alert.poi.name + ', ' + alert.poi.region + ', CA')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => onDismiss(alert.id)}

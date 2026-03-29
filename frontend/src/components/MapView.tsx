@@ -13,6 +13,7 @@ import L from 'leaflet';
 import { POI } from '../types';
 import { GPSState } from '../types';
 import { useHwy1Route } from '../hooks/useHwy1Route';
+import { useWikipediaData } from '../hooks/useWikipediaData';
 import { CATEGORY_EMOJI, tierColor } from '../utils/markers';
 
 // ── Fix Leaflet default icon paths ──────────────────────────────────────────
@@ -129,7 +130,7 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
           }}
         >
           <Popup minWidth={220} maxWidth={280}>
-            <POIPopup poi={poi} onExpand={() => onSelectPOI(poi)} />
+            <POIPopup poi={poi} onExpand={() => onSelectPOI(poi)} isSelected={selectedPOI?.id === poi.id} />
           </Popup>
         </Marker>
       ))}
@@ -154,15 +155,38 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
   );
 }
 
+// ── Lazy Wikipedia hero image — only fetches when this popup is open ─────────
+function PopupWikiImage({ poi }: { poi: POI }) {
+  const wiki = useWikipediaData(poi.name, poi.region, poi.lat, poi.lng);
+  if (wiki.loading) {
+    return <div className="absolute inset-0 animate-pulse bg-white/5" />;
+  }
+  if (wiki.imageUrl) {
+    return <img src={wiki.imageUrl} alt={poi.name} className="w-full h-full object-cover" loading="lazy" />;
+  }
+  return (
+    <div className="absolute inset-0 flex items-center justify-center opacity-20">
+      <span className="text-4xl">{CATEGORY_EMOJI[poi.category]}</span>
+    </div>
+  );
+}
+
 // ── Compact popup card inside the Leaflet popup ──────────────────────────────
-function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
+function POIPopup({ poi, onExpand, isSelected }: { poi: POI; onExpand: () => void; isSelected: boolean }) {
   const tierLabels: Record<number, string> = { 1: 'Must-See', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
 
   return (
     <div className="min-w-[220px] max-w-[280px] overflow-hidden">
-      {/* Category emoji header — no Wikipedia fetch here (would fire for all 145 markers on mount) */}
-      <div className="w-full h-16 bg-white/5 overflow-hidden relative -mx-[1px] -mt-[1px] mb-3 rounded-t-[7px] flex items-center justify-center">
-        <span className="text-4xl opacity-70">{CATEGORY_EMOJI[poi.category]}</span>
+      {/* Hero image: only fetches Wikipedia when this popup is selected/open */}
+      <div className="w-full h-28 bg-white/5 overflow-hidden relative -mx-[1px] -mt-[1px] mb-3 rounded-t-[7px]">
+        {isSelected
+          ? <PopupWikiImage poi={poi} />
+          : (
+            <div className="absolute inset-0 flex items-center justify-center opacity-20">
+              <span className="text-4xl">{CATEGORY_EMOJI[poi.category]}</span>
+            </div>
+          )
+        }
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
       <div className="p-3 pt-0">
