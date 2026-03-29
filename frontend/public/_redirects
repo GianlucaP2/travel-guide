@@ -1,2 +1,7 @@
-# SPA routing — all paths serve index.html so React Router handles navigation
+# API proxy — forwards /api/* to the backend (Cloudflare Tunnel URL)
+# Update the tunnel URL here whenever cloudflared restarts (anonymous tunnel).
+# Permanent fix: switch to a named tunnel → stable URL, never changes.
+/api/*  https://strictly-decisions-actress-miles.trycloudflare.com/api/:splat  200
+
+# SPA routing — all other paths serve index.html so React Router handles navigation
 /*    /index.html   200
