@@ -1,8 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { POI } from '../types';
 import { Filters } from '../hooks/usePOIs';
 import { CATEGORY_EMOJI, CATEGORY_LABEL, tierColor, tierBadge } from '../utils/markers';
 import FilterPanel from './FilterPanel';
+
+// ── Itinerary URL builder ─────────────────────────────────────────────────────
+// Sorts stops north-to-south (by distanceFromSF) so Maps gets the optimal order.
+// Uses named addresses — never raw coordinates — so Google Maps resolves them correctly.
+function buildItineraryUrl(pois: POI[]): string {
+  const sorted = [...pois].sort((a, b) => (a.distanceFromSF ?? 0) - (b.distanceFromSF ?? 0));
+  const stops = sorted.map(p => {
+    // Prefer the stored address; fall back to "Name, Region, CA" for named search
+    const label = p.address ?? `${p.name}, ${p.region}, CA`;
+    return encodeURIComponent(label);
+  });
+  return `https://www.google.com/maps/dir/${stops.join('/')}`;
+}
 
 interface SidebarProps {
   pois: POI[];
@@ -26,9 +39,35 @@ export default function Sidebar({
 }: SidebarProps) {
   const [tab, setTab] = useState<'list' | 'filters'>('list');
 
+  // ── Itinerary planning state ────────────────────────────────────────────────
+  const [planMode, setPlanMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const cancelPlan = useCallback(() => {
+    setPlanMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const openItinerary = useCallback(() => {
+    const chosen = filtered.filter(p => selectedIds.has(p.id));
+    window.open(buildItineraryUrl(chosen), '_blank', 'noopener');
+  }, [filtered, selectedIds]);
+
+  // ───────────────────────────────────────────────────────────────────────────
+
   const activeFilterCount =
     filters.categories.size + filters.tiers.size + filters.regions.size +
     (filters.search.trim() ? 1 : 0);
+
+  const sharedPlanProps = { planMode, selectedIds, toggleSelect };
 
   return (
     <>
@@ -48,6 +87,12 @@ export default function Sidebar({
           tab={tab}
           setTab={setTab}
           activeFilterCount={activeFilterCount}
+          planMode={planMode}
+          selectedIds={selectedIds}
+          toggleSelect={toggleSelect}
+          onStartPlan={() => setPlanMode(true)}
+          onCancelPlan={cancelPlan}
+          onOpenItinerary={openItinerary}
         />
       </div>
 
@@ -90,6 +135,12 @@ export default function Sidebar({
             tab={tab}
             setTab={setTab}
             activeFilterCount={activeFilterCount}
+            planMode={planMode}
+            selectedIds={selectedIds}
+            toggleSelect={toggleSelect}
+            onStartPlan={() => setPlanMode(true)}
+            onCancelPlan={cancelPlan}
+            onOpenItinerary={openItinerary}
           />
         </div>
       </div>
@@ -102,7 +153,10 @@ function SidebarContent({
   pois, filtered, selectedPOI, onSelectPOI,
   filters, onToggleCategory, onToggleTier, onToggleRegion, onSearch, onClear,
   tab, setTab, activeFilterCount,
+  planMode, selectedIds, toggleSelect, onStartPlan, onCancelPlan, onOpenItinerary,
 }: any) {
+  const selectedCount = selectedIds.size;
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -128,26 +182,66 @@ function SidebarContent({
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="flex rounded-xl overflow-hidden bg-dark-400 border border-white/5">
-          {(['list', 'filters'] as const).map(t => (
+        {/* Tabs + Plan toggle */}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-xl overflow-hidden bg-dark-400 border border-white/5 flex-1">
+            {(['list', 'filters'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
+                  tab === t ? 'bg-ocean-600 text-white' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {t === 'filters' && activeFilterCount > 0 ? `Filters (${activeFilterCount})` : t === 'list' ? 'Stops' : 'Filters'}
+              </button>
+            ))}
+          </div>
+          {/* Plan mode toggle */}
+          {!planMode ? (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 py-2 text-xs font-medium capitalize transition-colors ${
-                tab === t ? 'bg-ocean-600 text-white' : 'text-gray-500 hover:text-gray-300'
-              }`}
+              onClick={onStartPlan}
+              title="Select stops to build a route"
+              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-dark-400 border border-white/10 text-gray-400 hover:text-white hover:border-ocean-500 transition-all text-xs font-medium"
             >
-              {t === 'filters' && activeFilterCount > 0 ? `Filters (${activeFilterCount})` : t === 'list' ? 'Stops' : 'Filters'}
+              <span>🗺️</span>
+              <span className="hidden sm:inline">Plan</span>
             </button>
-          ))}
+          ) : (
+            <button
+              onClick={onCancelPlan}
+              title="Cancel planning"
+              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-2 rounded-xl bg-dark-400 border border-red-500/40 text-red-400 hover:border-red-400 transition-all text-xs font-medium"
+            >
+              <span>✕</span>
+              <span className="hidden sm:inline">Cancel</span>
+            </button>
+          )}
         </div>
+
+        {/* Plan mode info bar */}
+        {planMode && (
+          <div className="mt-2 px-3 py-2 rounded-xl bg-ocean-500/10 border border-ocean-500/25 text-xs text-ocean-300">
+            {selectedCount === 0
+              ? 'Tap stops below to add them to your route'
+              : selectedCount === 1
+              ? '1 stop selected — add at least one more'
+              : `${selectedCount} stops selected · sorted SF → LA`}
+          </div>
+        )}
       </div>
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'list' ? (
-          <POIList filtered={filtered} selectedPOI={selectedPOI} onSelectPOI={onSelectPOI} />
+          <POIList
+            filtered={filtered}
+            selectedPOI={selectedPOI}
+            onSelectPOI={onSelectPOI}
+            planMode={planMode}
+            selectedIds={selectedIds}
+            onToggle={toggleSelect}
+          />
         ) : (
           <FilterPanel
             filters={filters}
@@ -158,12 +252,37 @@ function SidebarContent({
           />
         )}
       </div>
+
+      {/* ── Create Itinerary sticky footer (plan mode, ≥2 selected) ── */}
+      {planMode && selectedCount >= 2 && (
+        <div className="flex-shrink-0 p-3 border-t border-white/10 bg-dark-500/80 backdrop-blur-sm">
+          <button
+            onClick={onOpenItinerary}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 active:scale-[0.98] transition-all shadow-lg shadow-ocean-900/40"
+          >
+            <span>🗺️</span>
+            <span>Open Itinerary in Google Maps</span>
+            <span className="ml-1 bg-white/20 rounded-full px-2 py-0.5 text-xs">{selectedCount}</span>
+          </button>
+          <p className="text-center text-[11px] text-gray-600 mt-1.5">Opens Google Maps · route not started automatically</p>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── POI list ──────────────────────────────────────────────────────────────────
-function POIList({ filtered, selectedPOI, onSelectPOI }: { filtered: POI[]; selectedPOI: POI | null; onSelectPOI: (p: POI) => void }) {
+function POIList({
+  filtered, selectedPOI, onSelectPOI,
+  planMode, selectedIds, onToggle,
+}: {
+  filtered: POI[];
+  selectedPOI: POI | null;
+  onSelectPOI: (p: POI) => void;
+  planMode: boolean;
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+}) {
   // Group by region
   const byRegion: Record<string, POI[]> = {};
   for (const p of filtered) {
@@ -195,6 +314,9 @@ function POIList({ filtered, selectedPOI, onSelectPOI }: { filtered: POI[]; sele
               poi={poi}
               selected={selectedPOI?.id === poi.id}
               onClick={() => onSelectPOI(poi)}
+              planMode={planMode}
+              inItinerary={selectedIds.has(poi.id)}
+              onToggle={() => onToggle(poi.id)}
             />
           ))}
         </div>
@@ -204,17 +326,45 @@ function POIList({ filtered, selectedPOI, onSelectPOI }: { filtered: POI[]; sele
 }
 
 // ── Single POI card in the list ───────────────────────────────────────────────
-function POICard({ poi, selected, onClick }: { poi: POI; selected: boolean; onClick: () => void }) {
+function POICard({
+  poi, selected, onClick,
+  planMode, inItinerary, onToggle,
+}: {
+  poi: POI;
+  selected: boolean;
+  onClick: () => void;
+  planMode: boolean;
+  inItinerary: boolean;
+  onToggle: () => void;
+}) {
   const color = tierColor(poi.tier);
+  const handleClick = planMode ? onToggle : onClick;
+
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={`w-full text-left px-4 py-3 border-b border-white/5 transition-all hover:bg-white/5 active:bg-white/10 ${
-        selected ? 'bg-white/10 border-l-2' : 'border-l-2 border-l-transparent'
+        planMode
+          ? inItinerary
+            ? 'bg-ocean-500/15 border-l-2 border-l-ocean-400'
+            : 'border-l-2 border-l-transparent'
+          : selected
+          ? 'bg-white/10 border-l-2'
+          : 'border-l-2 border-l-transparent'
       }`}
-      style={selected ? { borderLeftColor: color } : {}}
+      style={!planMode && selected ? { borderLeftColor: color } : {}}
     >
       <div className="flex items-center gap-2">
+        {/* Plan mode checkbox */}
+        {planMode && (
+          <div className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+            inItinerary
+              ? 'bg-ocean-500 border-ocean-400'
+              : 'border-white/25 bg-dark-400'
+          }`}>
+            {inItinerary && <span className="text-white text-[10px] font-bold">✓</span>}
+          </div>
+        )}
         <span className="text-base flex-shrink-0">{CATEGORY_EMOJI[poi.category]}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -226,7 +376,7 @@ function POICard({ poi, selected, onClick }: { poi: POI; selected: boolean; onCl
             {poi.price && <span className="text-[11px] text-gray-600">{poi.price}</span>}
           </div>
         </div>
-        <span className="text-gray-600 text-xs flex-shrink-0">›</span>
+        {!planMode && <span className="text-gray-600 text-xs flex-shrink-0">›</span>}
       </div>
     </button>
   );
