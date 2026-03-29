@@ -203,3 +203,12 @@
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255,255,255,0.07);
 }
+
+/* ── Proximity toast slide-in ────────────────────────────────────── */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0)   scale(1);    }
+}
+.toast-slide-in {
+  animation: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

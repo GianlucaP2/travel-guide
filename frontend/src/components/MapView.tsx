@@ -29,8 +29,14 @@ L.Icon.Default.mergeOptions({
 });
 
 // ── Auto-follow GPS position ─────────────────────────────────────────────────
-function MapFollower({ gps }: { gps: GPSState }) {
+function MapFollower({ gps, onStopFollowing }: { gps: GPSState; onStopFollowing: () => void }) {
   const map = useMap();
+  // Unfollow when user manually drags the map
+  React.useEffect(() => {
+    const stop = () => onStopFollowing();
+    map.on('dragstart', stop);
+    return () => { map.off('dragstart', stop); };
+  }, [map, onStopFollowing]);
   React.useEffect(() => {
     if (gps.following && gps.lat !== null && gps.lng !== null) {
       map.setView([gps.lat, gps.lng], Math.max(map.getZoom(), 13), { animate: true });
@@ -40,13 +46,15 @@ function MapFollower({ gps }: { gps: GPSState }) {
 }
 
 // ── Center on selected POI ───────────────────────────────────────────────────
-function PanTo({ poi }: { poi: POI | null }) {
+function PanTo({ poi, onStopFollowing }: { poi: POI | null; onStopFollowing: () => void }) {
   const map = useMap();
   React.useEffect(() => {
     if (poi) {
+      onStopFollowing();
+      map.closePopup();
       map.setView([poi.lat, poi.lng], Math.max(map.getZoom(), 14), { animate: true });
     }
-  }, [poi, map]);
+  }, [poi, map, onStopFollowing]);
   return null;
 }
 
@@ -76,9 +84,10 @@ interface MapViewProps {
   selectedPOI: POI | null;
   onSelectPOI: (poi: POI | null) => void;
   gps: GPSState;
+  onStopFollowing: () => void;
 }
 
-export default function MapView({ pois, selectedPOI, onSelectPOI, gps }: MapViewProps) {
+export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFollowing }: MapViewProps) {
   return (
     <MapContainer
       center={[37.0, -121.9]}
@@ -138,8 +147,8 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps }: MapView
         </>
       )}
 
-      <MapFollower gps={gps} />
-      <PanTo poi={selectedPOI} />
+      <MapFollower gps={gps} onStopFollowing={onStopFollowing} />
+      <PanTo poi={selectedPOI} onStopFollowing={onStopFollowing} />
     </MapContainer>
   );
 }
@@ -147,7 +156,7 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps }: MapView
 // ── Compact popup card inside the Leaflet popup ──────────────────────────────
 function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
   const tierLabels: Record<number, string> = { 1: 'Must-See', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
-  const wiki = useWikipediaData(poi.name, poi.region);
+  const wiki = useWikipediaData(poi.name, poi.region, poi.lat, poi.lng);
 
   return (
     <div className="min-w-[220px] max-w-[280px] overflow-hidden">
@@ -175,15 +184,29 @@ function POIPopup({ poi, onExpand }: { poi: POI; onExpand: () => void }) {
           </div>
         </div>
         <p className="text-xs text-gray-300 leading-relaxed line-clamp-3 mb-3">{poi.description}</p>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] text-gray-500">{poi.region}</span>
-          <button
-            onClick={onExpand}
-            className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
-            style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
-          >
-            Details →
-          </button>
+          <div className="flex gap-1">
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`}
+              target="_blank" rel="noopener noreferrer"
+              className="text-xs px-2 py-1 rounded-lg font-medium transition-colors"
+              style={{ background: '#ffffff18', color: '#9ca3af', border: '1px solid #ffffff22' }}
+            >📍</a>
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}&travelmode=driving&dir_action=navigate`}
+              target="_blank" rel="noopener noreferrer"
+              className="text-xs px-2 py-1 rounded-lg font-medium transition-colors"
+              style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
+            >🧭</a>
+            <button
+              onClick={onExpand}
+              className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors"
+              style={{ background: tierColor(poi.tier) + '33', color: tierColor(poi.tier), border: `1px solid ${tierColor(poi.tier)}66` }}
+            >
+              ···
+            </button>
+          </div>
         </div>
       </div>
     </div>

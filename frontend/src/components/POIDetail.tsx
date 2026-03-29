@@ -10,11 +10,18 @@ interface POIDetailProps {
 
 export default function POIDetail({ poi, onClose }: POIDetailProps) {
   const color = tierColor(poi.tier);
-  const wiki = useWikipediaData(poi.name, poi.region);
+  const wiki = useWikipediaData(poi.name, poi.region, poi.lat, poi.lng);
   const [wikiExpanded, setWikiExpanded] = useState(false);
 
-  const mapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${poi.lat},${poi.lng}`;
-  const mapsPlaceUrl = `https://www.google.com/maps/search/${encodeURIComponent(poi.name + ' ' + poi.region + ' California')}/@${poi.lat},${poi.lng},15z`;
+  // "View on Map" = exact pin at POI coords (no routing, just shows the place)
+  const mapsViewUrl =
+    `https://www.google.com/maps/search/?api=1&query=${poi.lat},${poi.lng}`;
+  // "Route There" = navigation from current location, starts immediately
+  const mapsRouteUrl =
+    `https://www.google.com/maps/dir/?api=1` +
+    `&destination=${poi.lat},${poi.lng}` +
+    `&travelmode=driving` +
+    `&dir_action=navigate`;
 
   return (
     <div className="glass flex flex-col max-h-[85vh] md:max-h-full overflow-hidden rounded-t-2xl md:rounded-none">
@@ -146,21 +153,21 @@ export default function POIDetail({ poi, onClose }: POIDetailProps) {
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <a
-            href={mapsDirectionsUrl}
+            href={mapsRouteUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="col-span-2 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all hover:opacity-90 active:opacity-80"
             style={{ background: color, color: 'white' }}
           >
-            🧭 Get Directions
+            🧭 Route There
           </a>
           <a
-            href={mapsPlaceUrl}
+            href={mapsViewUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border border-white/10 hover:bg-white/8 transition-colors text-gray-300"
           >
-            🗺️ View on Maps
+            📍 View on Map
           </a>
           {wiki.wikiUrl ? (
             <a

@@ -7,6 +7,7 @@ import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
 import POIDetail from './components/POIDetail';
 import GPSButton from './components/GPSButton';
+import NotificationToast from './components/NotificationToast';
 
 export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
@@ -18,8 +19,8 @@ export default function App() {
     toggleCategory, toggleTier, toggleRegion, setSearch, clearFilters,
   } = usePOIs();
 
-  // Fire browser notifications when approaching a POI (1 km radius)
-  useProximityNotifications(filtered, gps);
+  // Fire in-app toasts + OS notifications when approaching a POI
+  const { alerts, dismissAlert } = useProximityNotifications(filtered, gps);
 
   const handleSelectPOI = useCallback((poi: POI | null) => {
     setSelectedPOI(poi);
@@ -79,6 +80,7 @@ export default function App() {
           selectedPOI={selectedPOI}
           onSelectPOI={handleSelectPOI}
           gps={gps}
+          onStopFollowing={() => setFollowing(false)}
         />
 
         {/* ── Floating header ──────────────────────────────────────── */}
@@ -159,6 +161,9 @@ export default function App() {
             onClick={() => setSelectedPOI(null)}
           />
         )}
+
+        {/* ── Proximity notification toasts ───────── */}
+        <NotificationToast alerts={alerts} onDismiss={dismissAlert} />
       </div>
     </div>
   );

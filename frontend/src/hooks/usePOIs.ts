@@ -8,6 +8,33 @@ export interface Filters {
   search: string;
 }
 
+const STORAGE_KEY = 'tg_filters_v1';
+
+function serializeFilters(f: Filters): string {
+  return JSON.stringify({
+    categories: [...f.categories],
+    tiers: [...f.tiers],
+    regions: [...f.regions],
+    search: f.search,
+  });
+}
+
+function loadFilters(): Filters {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_FILTERS;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      categories: new Set<Category>((parsed.categories as Category[]) ?? []),
+      tiers: new Set<Tier>((parsed.tiers as Tier[]) ?? []),
+      regions: new Set<Region>((parsed.regions as Region[]) ?? []),
+      search: typeof parsed.search === 'string' ? parsed.search : '',
+    };
+  } catch {
+    return DEFAULT_FILTERS;
+  }
+}
+
 const DEFAULT_FILTERS: Filters = {
   categories: new Set(),
   tiers: new Set(),
@@ -19,7 +46,7 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
 
 export function usePOIs() {
   const [pois, setPois] = useState<POI[]>([]);
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<Filters>(loadFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +67,13 @@ export function usePOIs() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Persist filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, serializeFilters(filters));
+    } catch { /* storage unavailable */ }
+  }, [filters]);
 
   const filtered = useMemo(() => {
     return pois.filter(p => {
