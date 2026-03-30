@@ -99,15 +99,15 @@ export default function Sidebar({
       {/* ── Mobile bottom sheet ─────────────────────────────────────── */}
       <div
         className={`md:hidden fixed inset-x-0 bottom-0 z-[2000] transition-transform duration-300 ${
-          isOpen ? 'translate-y-0' : 'translate-y-[calc(100%-4.5rem)]'
+          isOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
         {/* Drag handle */}
         <div
           className="glass rounded-t-2xl border-t border-white/10 cursor-pointer"
-          onClick={isOpen ? onClose : undefined}
+          onClick={onClose}
         >
-          <div className="flex items-center justify-between px-4 py-3" onClick={onClose}>
+          <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-1 bg-white/20 rounded-full mx-auto" />
             </div>
