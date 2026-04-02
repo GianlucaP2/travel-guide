@@ -71,10 +71,13 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
     error,
     isRescheduling,
     isBehindSchedule,
+    swappingSlotId,
     laPoisCount,
+    laPois,
     generate,
     markDone,
     replan,
+    swapSlot,
     clearPlan,
   } = usePlanner(pois);
 
@@ -97,8 +100,26 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
   const [budgetLevel, setBudgetLevel] = useState<BudgetLevel>(3);
 
   // ── Expanded day ───────────────────────────────────────────────────────────
-  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);  // swap drawer: { date, poiId } of the slot currently open for swap
+  const [openSwap, setOpenSwap] = useState<{ date: string; poiId: string } | null>(null);
+  const [swapError, setSwapError] = useState<string | null>(null);
 
+  const handleSwap = async (date: string, poiId: string, prompt: string) => {
+    setSwapError(null);
+    try {
+      await swapSlot(date, poiId, prompt);
+      setOpenSwap(null); // close drawer on success
+    } catch (err: any) {
+      setSwapError(err.message || 'Swap failed');
+    }
+  };
+
+  const handlePickPOI = (date: string, poiId: string, pickedId: string, pickedName: string, startTime: string, endTime: string) => {
+    // Direct pick: just call swapSlot with a "__direct__" sentinel so backend uses the picked POI
+    // Actually easier: inject directly without AI
+    swapSlot(date, poiId, `__direct__:${pickedId}:${pickedName}:${startTime}:${endTime}`);
+    setOpenSwap(null);
+  };
   // Auto-expand first day when plan is ready
   useEffect(() => {
     if (status === 'ready' && plan && plan.days.length > 0 && !expandedDay) {
@@ -494,15 +515,38 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
                   {/* Slots */}
                   {isExpanded && (
                     <div className="pb-2 space-y-0.5 px-3">
-                      {day.slots.map((slot, idx) => (
-                        <SlotRow
-                          key={`${slot.poiId}-${idx}`}
-                          slot={slot}
-                          date={day.date}
-                          onToggle={(done) => markDone(day.date, slot.poiId, done)}
-                          onViewMap={() => handleViewOnMap(slot.poiId)}
-                        />
-                      ))}
+                      {day.slots.map((slot, idx) => {
+                        const isSwapOpen = openSwap?.date === day.date && openSwap?.poiId === slot.poiId;
+                        const isSwapping = swappingSlotId === slot.poiId;
+                        return (
+                          <React.Fragment key={`${slot.poiId}-${idx}`}>
+                            <SlotRow
+                              slot={slot}
+                              date={day.date}
+                              isSwapOpen={isSwapOpen}
+                              isSwapping={isSwapping}
+                              onToggle={(done) => markDone(day.date, slot.poiId, done)}
+                              onViewMap={() => handleViewOnMap(slot.poiId)}
+                              onToggleSwap={() => {
+                                setOpenSwap(isSwapOpen ? null : { date: day.date, poiId: slot.poiId });
+                                setSwapError(null);
+                              }}
+                            />
+                            {isSwapOpen && (
+                              <SwapDrawer
+                                slot={slot}
+                                date={day.date}
+                                allPois={laPois}
+                                daySlots={day.slots}
+                                isSwapping={isSwapping}
+                                error={swapError}
+                                onSwap={(prompt: string) => handleSwap(day.date, slot.poiId, prompt)}
+                                onClose={() => { setOpenSwap(null); setSwapError(null); }}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -520,20 +564,21 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
 interface SlotRowProps {
   slot: { poiId: string; poiName: string; startTime: string; endTime: string; notes?: string; done: boolean };
   date: string;
+  isSwapOpen: boolean;
+  isSwapping: boolean;
   onToggle: (done: boolean) => void;
   onViewMap: () => void;
+  onToggleSwap: () => void;
 }
 
-function SlotRow({ slot, onToggle, onViewMap }: SlotRowProps) {
-  // Guess category emoji from name keywords
+function SlotRow({ slot, onToggle, onViewMap, onToggleSwap, isSwapOpen, isSwapping }: SlotRowProps) {
   const emoji = guessEmoji(slot.poiName);
-  // Night badge: slots starting at 20:00 or later
   const isNight = slot.startTime >= '20:00';
 
   return (
     <div
       className={`flex items-start gap-3 rounded-xl p-2.5 transition-all ${
-        slot.done ? 'opacity-50' : 'hover:bg-white/5'
+        slot.done ? 'opacity-50' : isSwapOpen ? 'bg-white/5 ring-1 ring-ocean-400/30' : 'hover:bg-white/5'
       }`}
     >
       {/* Checkbox */}
@@ -573,14 +618,155 @@ function SlotRow({ slot, onToggle, onViewMap }: SlotRowProps) {
         )}
       </div>
 
-      {/* View on map */}
-      <button
-        onClick={onViewMap}
-        title="View on map"
-        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-ocean-400 hover:bg-white/10 transition-all text-xs"
-      >
-        📍
-      </button>
+      {/* Action buttons */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {!slot.done && (
+          <button
+            onClick={onToggleSwap}
+            title="Swap this item"
+            disabled={isSwapping}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all text-xs ${
+              isSwapping
+                ? 'text-ocean-400 animate-pulse'
+                : isSwapOpen
+                ? 'text-ocean-400 bg-ocean-400/15'
+                : 'text-gray-500 hover:text-ocean-400 hover:bg-white/10'
+            }`}
+          >
+            {isSwapping ? '⏳' : '✏️'}
+          </button>
+        )}
+        <button
+          onClick={onViewMap}
+          title="View on map"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-ocean-400 hover:bg-white/10 transition-all text-xs"
+        >
+          📍
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── SwapDrawer sub-component ─────────────────────────────────────────────────
+
+const QUICK_PROMPTS = [
+  { emoji: '💸', label: 'Cheaper option',     prompt: 'Find something cheaper or free' },
+  { emoji: '👥', label: 'Meet people',         prompt: 'Find somewhere I can meet other travellers or locals' },
+  { emoji: '🌿', label: 'More nature',         prompt: 'Find something outdoors or in nature' },
+  { emoji: '🍽️', label: 'Better food nearby', prompt: 'Find a better restaurant or food spot nearby' },
+  { emoji: '🎭', label: 'More local vibe',     prompt: 'Find something more local and authentic, less touristy' },
+  { emoji: '⚡', label: 'Something quicker',   prompt: 'Find something that takes less time, under 1 hour' },
+];
+
+interface SwapDrawerProps {
+  slot: { poiId: string; poiName: string; startTime: string; endTime: string; notes?: string; done: boolean };
+  date: string;
+  allPois: Array<{ id: string; name: string; category: string; tier: number; region: string; price?: string; bestTime?: string }>;
+  daySlots: Array<{ poiId: string; poiName: string }>;
+  isSwapping: boolean;
+  error: string | null;
+  onSwap: (prompt: string) => void;
+  onClose: () => void;
+}
+
+function SwapDrawer({ slot, allPois, daySlots, isSwapping, error, onSwap, onClose }: SwapDrawerProps) {
+  const [tab, setTab] = useState<'ai' | 'browse'>('ai');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [browseFilter, setBrowseFilter] = useState('');
+
+  const usedIds = new Set(daySlots.map((s) => s.poiId));
+  const candidates = allPois
+    .filter((p) => !usedIds.has(p.id))
+    .filter((p) => !browseFilter || p.name.toLowerCase().includes(browseFilter.toLowerCase()));
+
+  const handleCustomSubmit = () => {
+    const t = customPrompt.trim();
+    if (t) { onSwap(t); setCustomPrompt(''); }
+  };
+
+  return (
+    <div className="mx-1 mb-2 rounded-xl glass border border-ocean-400/20 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+        <span className="text-xs font-semibold text-ocean-400 flex-1">✏️ Swap "{slot.poiName}"</span>
+        <button onClick={onClose} className="text-gray-500 hover:text-white text-xs px-1">✕</button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-white/10">
+        {(['ai', 'browse'] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+              tab === t ? 'text-ocean-400 border-b-2 border-ocean-400' : 'text-gray-500 hover:text-gray-300'
+            }`}>
+            {t === 'ai' ? '🤖 AI Suggest' : '📋 Browse List'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'ai' && (
+        <div className="p-3 space-y-3">
+          {/* Quick chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_PROMPTS.map((q) => (
+              <button key={q.prompt} onClick={() => !isSwapping && onSwap(q.prompt)}
+                disabled={isSwapping}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium bg-white/5 border border-white/10 hover:border-ocean-400/40 hover:bg-ocean-400/10 transition-all disabled:opacity-40 text-gray-300">
+                <span>{q.emoji}</span>{q.label}
+              </button>
+            ))}
+          </div>
+          {/* Custom prompt */}
+          <div className="flex gap-2">
+            <input
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+              placeholder="Or type your own request…"
+              disabled={isSwapping}
+              className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:border-ocean-400 focus:outline-none transition-colors disabled:opacity-40"
+            />
+            <button onClick={handleCustomSubmit} disabled={isSwapping || !customPrompt.trim()}
+              className="px-3 py-2 rounded-xl bg-ocean-500 hover:bg-ocean-400 text-white text-xs font-semibold transition-all disabled:opacity-40">
+              {isSwapping ? '…' : '→'}
+            </button>
+          </div>
+          {isSwapping && (
+            <p className="text-[11px] text-ocean-400 text-center animate-pulse">🤖 GPT-4o is finding the best swap…</p>
+          )}
+          {error && <p className="text-[11px] text-red-400">⚠️ {error}</p>}
+        </div>
+      )}
+
+      {tab === 'browse' && (
+        <div className="p-3 space-y-2">
+          <input
+            value={browseFilter}
+            onChange={(e) => setBrowseFilter(e.target.value)}
+            placeholder="Filter places…"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 focus:border-ocean-400 focus:outline-none transition-colors"
+          />
+          <div className="max-h-52 overflow-y-auto space-y-0.5 -mx-1">
+            {candidates.slice(0, 50).map((p) => (
+              <button key={p.id}
+                onClick={() => !isSwapping && onSwap(`__direct__:${p.id}:${p.name}:${slot.startTime}:${slot.endTime}`)}
+                disabled={isSwapping}
+                className="w-full flex items-start gap-2 px-2 py-2 rounded-lg hover:bg-white/5 transition-colors text-left disabled:opacity-40">
+                <span className="text-sm flex-shrink-0">{guessEmoji(p.name)}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white truncate">{p.name}</p>
+                  <p className="text-[10px] text-gray-500">{p.region} · {p.price || 'free'}{p.bestTime ? ` · best: ${p.bestTime}` : ''}</p>
+                </div>
+                {p.tier === 0 && <span className="text-[10px] text-amber-400 flex-shrink-0">⭐</span>}
+              </button>
+            ))}
+            {candidates.length === 0 && (
+              <p className="text-xs text-gray-500 text-center py-3">No matches found</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

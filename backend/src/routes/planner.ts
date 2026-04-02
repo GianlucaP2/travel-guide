@@ -278,4 +278,87 @@ Please reorganise the remaining (undone) slots so the schedule is realistic give
   }
 });
 
+// ─── POST /api/planner/swap ───────────────────────────────────────────────────
+// Replace a single slot (or a set of slots) based on a natural-language prompt.
+// Returns a replacement slot (same time window, different POI).
+router.post('/swap', async (req: Request, res: Response) => {
+  try {
+    const { slot, date, daySlots, prompt, pois } = req.body as {
+      slot: PlanSlot;                // the slot being replaced
+      date: string;                  // "YYYY-MM-DD"
+      daySlots: PlanSlot[];          // all slots on that day (context)
+      prompt: string;                // e.g. "find something cheaper", "I want to meet people"
+      pois: PlanPOI[];               // available candidates (not already in day)
+    };
+
+    if (!slot || !prompt || !pois) {
+      return res.status(400).json({ error: 'slot, prompt and pois are required' });
+    }
+
+    const openai = getOpenAI();
+
+    const candidatesText = pois
+      .map(
+        (p) =>
+          `[${p.id}] "${p.name}" | ${p.category} | tier ${p.tier} | ${p.region} | hours: ${p.hours || 'flexible'} | best visit: ${p.bestTime || 'anytime'} | price: ${p.price || '?'} | coords: ${p.lat.toFixed(4)},${p.lng.toFixed(4)}`
+      )
+      .join('\n');
+
+    const dayContext = daySlots
+      .filter((s) => s.poiId !== slot.poiId)
+      .map((s) => `  ${s.startTime}–${s.endTime}: ${s.poiName}`)
+      .join('\n') || '  (no other slots)';
+
+    const systemPrompt = `You are an expert Los Angeles travel planner helping a traveller swap one item in their itinerary.
+
+Your job: given the current slot and a user request, pick the BEST replacement from the candidate list.
+
+RULES:
+1. Pick exactly one POI from the candidate list — do NOT invent places
+2. Keep the same time window (startTime and endTime) UNLESS the replacement venue has a different best-visit time that makes a minor shift necessary (max ±30 min)
+3. Respect timing: if bestTime is "morning" keep it morning, "evening" keep it evening, etc.
+4. Consider geographic proximity to the other slots on that day
+5. Write a short "notes" field (1 sentence) explaining why this is a good swap`;
+
+    const userPrompt = `Current slot to replace:
+  ${slot.startTime}–${slot.endTime}: "${slot.poiName}"
+
+User's request: "${prompt}"
+
+Other slots on ${date}:
+${dayContext}
+
+Available replacement candidates (pick ONE):
+${candidatesText}
+
+Return ONLY a valid JSON object (no markdown):
+{
+  "poiId": "exact-id-from-list",
+  "poiName": "Exact Name",
+  "startTime": "${slot.startTime}",
+  "endTime": "${slot.endTime}",
+  "notes": "One sentence on why this is a great swap.",
+  "done": false
+}`;
+
+    const response = await openai.responses.create({
+      model: 'gpt-4o',
+      tools: [{ type: 'web_search_preview' }],
+      input: [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: userPrompt },
+      ],
+    });
+
+    const rawText = response.output_text;
+    if (!rawText) throw new Error('Empty response from GPT-4o');
+
+    const result = JSON.parse(extractJSON(rawText)) as PlanSlot;
+    res.json({ slot: result });
+  } catch (err: any) {
+    console.error('[planner/swap] error:', err.message);
+    res.status(500).json({ error: err.message || 'Failed to swap slot' });
+  }
+});
+
 export default router;

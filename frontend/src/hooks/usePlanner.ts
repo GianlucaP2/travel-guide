@@ -95,6 +95,7 @@ export function usePlanner(allPois: POI[]) {
   );
   const [error, setError] = useState<string | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [swappingSlotId, setSwappingSlotId] = useState<string | null>(null);
 
   // Filtered LA-area POIs (trimmed for the API payload)
   const laPois = useMemo(
@@ -279,6 +280,93 @@ export function usePlanner(allPois: POI[]) {
     }
   }, [plan, setPlan]);
 
+  // ── Swap a single slot ────────────────────────────────────────────────────
+  const swapSlot = useCallback(
+    async (date: string, poiId: string, prompt: string) => {
+      if (!plan) return;
+      setSwappingSlotId(poiId);
+
+      const day = plan.days.find((d) => d.date === date);
+      const slot = day?.slots.find((s) => s.poiId === poiId);
+      if (!day || !slot) { setSwappingSlotId(null); return; }
+
+      // Direct pick (no AI): prompt = "__direct__:pickedId:pickedName:startTime:endTime"
+      if (prompt.startsWith('__direct__:')) {
+        const parts = prompt.split(':');
+        // parts: ['__direct__', pickedId, pickedName, startTime, endTime]
+        // Note: name may contain colons, so join remaining after index 4
+        const [, pickedId, ...rest] = parts;
+        const endTime = rest.pop()!;
+        const startTime = rest.pop()!;
+        const pickedName = rest.join(':');
+        setPlanInner((prev) => {
+          if (!prev) return prev;
+          const updated: TripPlan = {
+            ...prev,
+            days: prev.days.map((d) =>
+              d.date !== date
+                ? d
+                : {
+                    ...d,
+                    slots: d.slots.map((s) =>
+                      s.poiId === poiId
+                        ? { poiId: pickedId, poiName: pickedName, startTime, endTime, notes: '', done: false }
+                        : s
+                    ),
+                  }
+            ),
+          };
+          saveToStorage(updated);
+          return updated;
+        });
+        setSwappingSlotId(null);
+        return;
+      }
+
+      // Build candidate pool: all laPois not already on this day
+      const usedIds = new Set(day.slots.map((s) => s.poiId));
+      const candidates = laPois.filter((p) => !usedIds.has(p.id));
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/planner/swap`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slot,
+            date,
+            daySlots: day.slots,
+            prompt,
+            pois: candidates,
+          }),
+        });
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          throw new Error((body as any).error || `Server error ${resp.status}`);
+        }
+        const data = (await resp.json()) as { slot: PlanSlot };
+        setPlanInner((prev) => {
+          if (!prev) return prev;
+          const updated: TripPlan = {
+            ...prev,
+            days: prev.days.map((d) =>
+              d.date !== date
+                ? d
+                : { ...d, slots: d.slots.map((s) => (s.poiId === poiId ? { ...data.slot, done: false } : s)) }
+            ),
+          };
+          saveToStorage(updated);
+          return updated;
+        });
+      } catch (err) {
+        console.error('[usePlanner] swapSlot failed:', err);
+        throw err;
+      } finally {
+        setSwappingSlotId(null);
+      }
+    },
+    [plan, laPois, setPlanInner]
+  );
+
   // ── Clear plan ─────────────────────────────────────────────────────────────
   const clearPlan = useCallback(() => {
     setPlan(null);
@@ -303,11 +391,14 @@ export function usePlanner(allPois: POI[]) {
     status,
     error,
     isRescheduling,
+    swappingSlotId,
     isBehindSchedule,
     laPoisCount: laPois.length,
+    laPois,
     generate,
     markDone,
     replan,
+    swapSlot,
     clearPlan,
   };
 }
