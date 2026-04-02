@@ -8,6 +8,7 @@
 # Required GitHub secrets (repo Settings → Secrets and variables → Actions → Secrets):
 #   SSH_PRIVATE_KEY    — contents of ~/.ssh/id_ed25519 (include -----BEGIN/END----- lines)
 #   TAILSCALE_AUTHKEY  — reusable+ephemeral key from tailscale.com/admin/settings/keys
+#   OPENAI_API_KEY     — OpenAI secret key (injected into travel-guide-secrets at deploy time)
 #
 # How to add SSH_PRIVATE_KEY:
 #   cat ~/.ssh/id_ed25519 | gh secret set SSH_PRIVATE_KEY -R GianlucaP2/travel-guide
@@ -129,9 +130,11 @@ jobs:
 
       # ── 6. Apply k8s manifests ───────────────────────────────────────────────
       - name: Apply namespace and secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           for f in k8s/00-namespace.yaml k8s/01-secrets.yaml k8s/06-cloudflare-tunnel.yaml; do
-            cat "$f" | \
+            sed "s/REPLACE_WITH_REAL_KEY_DO_NOT_COMMIT/${OPENAI_API_KEY}/g" "$f" | \
               ssh -o StrictHostKeyChecking=no \
                   -i ~/.ssh/deploy_key \
                   ${{ env.SSH_USER }}@${{ env.MASTER_IP }} \
