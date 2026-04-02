@@ -84,6 +84,8 @@ export interface TripPlan {
   createdAt: string;
   startHour: string;
   endHour: string;
+  nightLife: boolean;
+  nightEndHour: string; // e.g. "00:00" = midnight
 }
 
 export interface PlannerConfig {
@@ -92,6 +94,8 @@ export interface PlannerConfig {
   endDate: string;   // "YYYY-MM-DD"
   startHour: string; // "09:00"
   endHour: string;   // "21:00"
+  nightLife: boolean;    // include dinner + after-dinner bars/rooftops
+  nightEndHour: string;  // e.g. "00:00" = midnight, "02:00" = 2am
 }
 
 // ─── GPS ─────────────────────────────────────────────────────────────────────

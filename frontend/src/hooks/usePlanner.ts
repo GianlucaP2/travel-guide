@@ -121,6 +121,8 @@ export function usePlanner(allPois: POI[]) {
             dates,
             startHour: cfg.startHour,
             endHour: cfg.endHour,
+            nightLife: cfg.nightLife,
+            nightEndHour: cfg.nightEndHour,
             pois: laPois,
           }),
         });
@@ -139,6 +141,8 @@ export function usePlanner(allPois: POI[]) {
           createdAt: new Date().toISOString(),
           startHour: cfg.startHour,
           endHour: cfg.endHour,
+          nightLife: cfg.nightLife,
+          nightEndHour: cfg.nightEndHour,
         };
 
         setPlan(newPlan);

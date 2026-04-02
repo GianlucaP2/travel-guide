@@ -40,14 +40,27 @@ interface DayPlan {
   slots: PlanSlot[];
 }
 
+// ─── Helper: extract JSON from Responses API output_text ─────────────────────
+function extractJSON(text: string): string {
+  // Strip markdown code fences if GPT wraps the JSON
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) return fenced[1].trim();
+  // Otherwise find the outermost { … }
+  const braced = text.match(/\{[\s\S]*\}/);
+  if (braced) return braced[0];
+  return text.trim();
+}
+
 // ─── POST /api/planner/generate ──────────────────────────────────────────────
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { zone, dates, startHour, endHour, pois } = req.body as {
+    const { zone, dates, startHour, endHour, nightLife, nightEndHour, pois } = req.body as {
       zone: string;
       dates: string[];
       startHour: string;
       endHour: string;
+      nightLife?: boolean;
+      nightEndHour?: string;
       pois: PlanPOI[];
     };
 
@@ -68,21 +81,49 @@ router.post('/generate', async (req: Request, res: Response) => {
     const dayCount = dates.length;
     const start = startHour || '09:00';
     const end = endHour || '21:00';
+    const useNightLife = nightLife === true;
+    const nightEnd = nightEndHour || '00:00';
 
-    const systemPrompt = `You are an expert Los Angeles travel planner who creates realistic, geographically efficient daily itineraries.
+    const nightLifeRules = useNightLife
+      ? `
+NIGHTLIFE PLANNING (ENABLED — plan dinner + after-dinner every day):
+- Extended evening window: ${end} → ${nightEnd === '00:00' ? 'midnight' : nightEnd}
+- Dinner: schedule a restaurant between 19:00–21:00 (90 min)
+- After dinner (21:30 onwards): plan 1–2 bars, rooftop lounges, or cocktail bars from the list
+- Bar/lounge slots: 60–90 min each
+- Geographic proximity: after-dinner bars should be near the dinner venue to minimise late-night driving
+- Use web search to verify tonight's hours for bars (some have restricted hours on certain days)
+- For bars marked as "reservations required" in their tips, mention this in the slot notes
+- Rooftop bars: prefer tier 1 (E.P. & L.P., The Penthouse, High Rooftop Erwin, The Roof EDITION)
+- Speakeasies/classic bars: excellent for a nightcap (Tower Bar, Basement Tavern, Del Monte)
+- Every evening must end no later than ${nightEnd === '00:00' ? '00:00' : nightEnd}`
+      : `
+DAYTIME ONLY: Daily hours end at ${end}. No bars or late-night venues.`;
+
+    const webSearchInstructions = `
+WEB SEARCH INSTRUCTIONS (you have internet access):
+- Search for current events, concerts, festivals, or special exhibitions in LA on each specific date
+- Verify that restaurants and bars are currently open and check for seasonal hours
+- Look for any current events at venues on the specific dates (e.g. "Griffith Observatory events April 3 2025")
+- Note any relevant current-events context in slot "notes" fields (e.g. "This week: Art Night at LACMA")
+- If a venue has temporarily closed or changed hours, swap it for an alternative from the list`;
+
+    const systemPrompt = `You are an expert Los Angeles travel planner who creates realistic, geographically efficient daily itineraries. You have access to the web and should use it to verify current hours and find current events.
 
 PLANNING RULES:
-1. Daily hours: ${start} – ${end}
+1. Daily sightseeing hours: ${start} – ${end}
 2. Cluster geographically close places on the same day to minimise LA driving time
 3. Add 15–45 min travel time between locations (LA traffic is real)
-4. Meals: place restaurants at logical times (lunch 12:00–14:00, dinner 18:30–21:00)
-5. Time per venue: restaurants 90 min, viewpoints 30–45 min, landmarks 60–120 min, experiences 2–4 h
-6. Select 3–5 attractions + 1–2 restaurants per day
+4. Meals: lunch 12:00–14:00 (90 min); dinner 19:00–21:00 (90 min) when nightlife is enabled, otherwise 18:30–20:30
+5. Time per venue: restaurants 90 min, viewpoints 30–45 min, landmarks 60–120 min, experiences 2–4 h, bars 60–90 min
+6. Select 3–5 daytime attractions + 1 lunch + dinner + (if nightlife) 1–2 evening bars
 7. Prefer tier 1 and tier 2 venues over tier 3+
 8. ONLY use places from the provided list — do NOT invent new places
-9. Every slot must have both startTime and endTime in HH:MM format
+9. Every slot must have both startTime and endTime in HH:MM (24h) format
+${nightLifeRules}
+${webSearchInstructions}
 
-OUTPUT FORMAT (JSON object, nothing else):
+OUTPUT FORMAT — return ONLY a valid JSON object, no markdown fences, no commentary:
 {
   "days": [
     {
@@ -94,7 +135,7 @@ OUTPUT FORMAT (JSON object, nothing else):
           "poiName": "Exact Name",
           "startTime": "09:30",
           "endTime": "11:00",
-          "notes": "Optional tip for this visit",
+          "notes": "Optional tip or current-events note",
           "done": false
         }
       ]
@@ -106,27 +147,32 @@ OUTPUT FORMAT (JSON object, nothing else):
 
 Accommodation / base zone: ${zone}
 Dates: ${dates.join(', ')}
-Daily window: ${start} – ${end}
+Daily sightseeing window: ${start} – ${end}${useNightLife ? `\nNightlife window: ${end} – ${nightEnd === '00:00' ? 'midnight' : nightEnd}` : ''}
+Nightlife planning: ${useNightLife ? 'YES — include dinner + bars/rooftops each evening' : 'NO — daytime only'}
+
+Please use web search to:
+1. Check for current events in LA on these specific dates
+2. Verify opening hours for the venues you select
+3. Note anything relevant in the slot notes
 
 Available places (use ONLY from this list):
 ${poisText}
 
-Create an optimised ${dayCount}-day plan. Cluster nearby attractions on the same day to minimise travel. Include a lunch and dinner restaurant each day. Prioritise tier 1 venues.`;
+Create an optimised ${dayCount}-day plan. Cluster nearby attractions on the same day to minimise travel. Include lunch every day.${useNightLife ? ' Include dinner + 1–2 evening bar/rooftop stops every day.' : ''} Prioritise tier 1 venues. Return only the JSON object.`;
 
-    const completion = await openai.chat.completions.create({
+    const response = await openai.responses.create({
       model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+      tools: [{ type: 'web_search_preview' }],
+      input: [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: userPrompt },
       ],
-      response_format: { type: 'json_object' },
-      temperature: 0.7,
     });
 
-    const raw = completion.choices[0].message.content;
-    if (!raw) throw new Error('Empty response from GPT-4o');
+    const rawText = response.output_text;
+    if (!rawText) throw new Error('Empty response from GPT-4o');
 
-    const result = JSON.parse(raw) as { days: DayPlan[] };
+    const result = JSON.parse(extractJSON(rawText)) as { days: DayPlan[] };
     res.json(result);
   } catch (err: any) {
     console.error('[planner/generate] error:', err.message);
@@ -146,18 +192,18 @@ router.post('/replan', async (req: Request, res: Response) => {
 
     const openai = getOpenAI();
 
-    const systemPrompt = `You are an expert LA travel planner helping a traveller who is running behind schedule.
+    const systemPrompt = `You are an expert LA travel planner helping a traveller who is running behind schedule. You have access to the web and can use it to check current venue hours.
 
 RULES:
 1. Reschedule the remaining (undone) slots to fit within the current and remaining days
 2. If today is tight, push lower-priority slots (higher tier number) to later days or drop them
-3. Keep restaurant slots — eating is non-negotiable
+3. Keep restaurant slots — eating is non-negotiable. Keep bar slots if nightlife was originally planned for the evening
 4. Use realistic 15–45 min travel time between locations
 5. Preserve all existing poiId and poiName values exactly
 6. Set done: false for all rescheduled slots
-7. Return valid JSON only
+7. Return only a valid JSON object, no markdown fences
 
-OUTPUT FORMAT (same structure as the remaining input):
+OUTPUT FORMAT:
 {
   "days": [ ... DayPlan objects with rescheduled slots ... ]
 }`;
@@ -168,22 +214,21 @@ Completed POI IDs: ${(completed || []).join(', ') || 'none yet'}
 Remaining schedule to reorganise:
 ${JSON.stringify(remaining, null, 2)}
 
-Please reorganise the remaining (undone) slots so the schedule is realistic given the current time. Drop lower-priority items if needed to make the remaining days manageable.`;
+Please reorganise the remaining (undone) slots so the schedule is realistic given the current time. Drop lower-priority daytime items if needed to make the remaining days manageable. Keep evening dinner and bar slots if they are still achievable. Return only the JSON object.`;
 
-    const completion = await openai.chat.completions.create({
+    const response = await openai.responses.create({
       model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+      tools: [{ type: 'web_search_preview' }],
+      input: [
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'user' as const, content: userPrompt },
       ],
-      response_format: { type: 'json_object' },
-      temperature: 0.5,
     });
 
-    const raw = completion.choices[0].message.content;
-    if (!raw) throw new Error('Empty response from GPT-4o');
+    const rawText = response.output_text;
+    if (!rawText) throw new Error('Empty response from GPT-4o');
 
-    const result = JSON.parse(raw) as { days: DayPlan[] };
+    const result = JSON.parse(extractJSON(rawText)) as { days: DayPlan[] };
     res.json(result);
   } catch (err: any) {
     console.error('[planner/replan] error:', err.message);

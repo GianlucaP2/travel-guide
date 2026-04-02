@@ -17,6 +17,14 @@ const HOUR_OPTIONS = Array.from({ length: 18 }, (_, i) => {
   return `${String(h).padStart(2, '0')}:00`;
 });
 
+const NIGHT_HOUR_OPTIONS: { value: string; label: string }[] = [
+  { value: '22:00', label: '10:00 PM' },
+  { value: '23:00', label: '11:00 PM' },
+  { value: '00:00', label: 'Midnight' },
+  { value: '01:00', label: '1:00 AM' },
+  { value: '02:00', label: '2:00 AM' },
+];
+
 const CATEGORY_EMOJI: Record<string, string> = {
   restaurant: '🍽️',
   bar: '🍸',
@@ -62,6 +70,8 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
   const [endDate, setEndDate] = useState(defaultEnd);
   const [startHour, setStartHour] = useState('09:00');
   const [endHour, setEndHour] = useState('21:00');
+  const [nightLife, setNightLife] = useState(true);
+  const [nightEndHour, setNightEndHour] = useState('00:00');
 
   // ── Expanded day ───────────────────────────────────────────────────────────
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -75,7 +85,7 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleGenerate = () => {
-    const cfg: PlannerConfig = { zone, startDate, endDate, startHour, endHour };
+    const cfg: PlannerConfig = { zone, startDate, endDate, startHour, endHour, nightLife, nightEndHour };
     generate(cfg);
   };
 
@@ -210,6 +220,53 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
             </div>
           )}
 
+          {/* Night Planning Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                🌙 Night Planning
+              </label>
+              <button
+                type="button"
+                onClick={() => setNightLife((v) => !v)}
+                className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
+                  nightLife ? 'bg-indigo-500' : 'bg-white/10'
+                }`}
+                aria-label={nightLife ? 'Disable night planning' : 'Enable night planning'}
+              >
+                <span
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${
+                    nightLife ? 'left-5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            {nightLife && (
+              <div className="glass border border-indigo-500/20 rounded-xl p-3 space-y-2.5">
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  🍽️ Dinner + 🍸 bar/rooftop tour planned each evening
+                </p>
+                <div>
+                  <p className="text-[10px] text-gray-500 mb-1">Night ends at</p>
+                  <select
+                    value={nightEndHour}
+                    onChange={(e) => setNightEndHour(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-indigo-400 focus:outline-none transition-colors"
+                  >
+                    {NIGHT_HOUR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value} className="bg-gray-900">
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            {!nightLife && (
+              <p className="text-[11px] text-gray-500 pl-1">Daytime itinerary only</p>
+            )}
+          </div>
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
@@ -236,7 +293,7 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
           </div>
           <div className="text-center space-y-1">
             <p className="text-sm font-semibold text-white">Planning your LA trip…</p>
-            <p className="text-xs text-gray-500">GPT-4o is building your daily itinerary</p>
+            <p className="text-xs text-gray-500">GPT-4o is searching the web &amp; building your itinerary</p>
           </div>
           <div className="flex gap-1.5">
             {[0, 1, 2].map((i) => (
@@ -375,6 +432,8 @@ interface SlotRowProps {
 function SlotRow({ slot, onToggle, onViewMap }: SlotRowProps) {
   // Guess category emoji from name keywords
   const emoji = guessEmoji(slot.poiName);
+  // Night badge: slots starting at 20:00 or later
+  const isNight = slot.startTime >= '20:00';
 
   return (
     <div
@@ -405,6 +464,11 @@ function SlotRow({ slot, onToggle, onViewMap }: SlotRowProps) {
           >
             {slot.poiName}
           </span>
+          {isNight && !slot.done && (
+            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 rounded-full px-1.5 py-0.5 font-medium">
+              🌙 night
+            </span>
+          )}
         </div>
         <p className="text-[11px] text-gray-500 mt-0.5">
           {slot.startTime} – {slot.endTime}
@@ -435,7 +499,9 @@ function formatDate(d: Date): string {
 function guessEmoji(name: string): string {
   const n = name.toLowerCase();
   if (n.includes('restaurant') || n.includes('café') || n.includes('bistro') || n.includes('kitchen') || n.includes('grill') || n.includes('sushi') || n.includes('pizza') || n.includes('taco') || n.includes('food')) return '🍽️';
-  if (n.includes('bar') || n.includes('cocktail') || n.includes('wine') || n.includes('brewery') || n.includes('pub')) return '🍸';
+  if (n.includes('rooftop') || n.includes('penthouse') || n.includes('skybar') || n.includes('high rooftop')) return '🏙️';
+  if (n.includes('speakeasy') || n.includes('tavern') || n.includes('townhouse')) return '🕯️';
+  if (n.includes('bar') || n.includes('cocktail') || n.includes('wine') || n.includes('brewery') || n.includes('pub') || n.includes('lounge') || n.includes('tower bar')) return '🍸';
   if (n.includes('beach') || n.includes('pier') || n.includes('ocean') || n.includes('surf')) return '🏖️';
   if (n.includes('museum') || n.includes('gallery') || n.includes('art') || n.includes('moca') || n.includes('broad') || n.includes('lacma')) return '🎨';
   if (n.includes('park') || n.includes('trail') || n.includes('nature') || n.includes('garden') || n.includes('canyon') || n.includes('lake') || n.includes('reservoir')) return '🌿';
