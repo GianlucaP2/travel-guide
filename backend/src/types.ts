@@ -39,6 +39,7 @@ export type Region =
   | 'Downtown LA'
   | 'Arts District'
   | 'Los Feliz / Silver Lake'
+  | 'Beverly Hills'
   | 'Joshua Tree'
   | 'Palm Springs';
 

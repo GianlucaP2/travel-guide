@@ -39,6 +39,7 @@ export type Region =
   | 'Downtown LA'
   | 'Arts District'
   | 'Los Feliz / Silver Lake'
+  | 'Beverly Hills'
   | 'Joshua Tree'
   | 'Palm Springs';
 
@@ -58,6 +59,42 @@ export interface POI {
   region: Region;
   distanceFromSF?: number;
 }
+
+// ─── AI Trip Planner ─────────────────────────────────────────────────────────
+
+export interface PlanSlot {
+  poiId: string;
+  poiName: string;
+  startTime: string; // "09:30"
+  endTime: string;   // "11:00"
+  notes?: string;
+  done: boolean;
+}
+
+export interface DayPlan {
+  date: string;   // "2025-04-02"
+  label: string;  // "Day 1 — Thursday, April 2"
+  slots: PlanSlot[];
+}
+
+export interface TripPlan {
+  id: string;
+  zone: string;
+  days: DayPlan[];
+  createdAt: string;
+  startHour: string;
+  endHour: string;
+}
+
+export interface PlannerConfig {
+  zone: string;
+  startDate: string; // "YYYY-MM-DD"
+  endDate: string;   // "YYYY-MM-DD"
+  startHour: string; // "09:00"
+  endHour: string;   // "21:00"
+}
+
+// ─── GPS ─────────────────────────────────────────────────────────────────────
 
 export interface GPSState {
   lat: number | null;

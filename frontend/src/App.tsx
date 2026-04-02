@@ -8,10 +8,12 @@ import Sidebar from './components/Sidebar';
 import POIDetail from './components/POIDetail';
 import GPSButton from './components/GPSButton';
 import NotificationToast from './components/NotificationToast';
+import PlannerPanel from './components/PlannerPanel';
 
 export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
   const { gps, startTracking, stopTracking, setFollowing } = useGPS();
   const {
@@ -113,6 +115,19 @@ export default function App() {
               onStop={stopTracking}
               onToggleFollow={handleToggleFollow}
             />
+
+            {/* Trip Planner button */}
+            <button
+              onClick={() => setPlannerOpen(v => !v)}
+              title="AI Trip Planner"
+              className={`flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
+                plannerOpen
+                  ? 'glass bg-ocean-500/20 border-ocean-400 text-ocean-300'
+                  : 'glass border-white/10 text-white hover:border-ocean-400'
+              }`}
+            >
+              <span className="text-base">🗓️</span>
+            </button>
           </div>
         </div>
 
@@ -164,6 +179,29 @@ export default function App() {
 
         {/* ── Proximity notification toasts ───────── */}
         <NotificationToast alerts={alerts} onDismiss={dismissAlert} />
+
+        {/* ── AI Trip Planner panel ──────────────────────────────────── */}
+        {plannerOpen && (
+          <>
+            {/* Desktop: fixed right panel */}
+            <div className="hidden md:block absolute top-0 right-0 bottom-0 w-96 lg:w-[26rem] z-[1002] overflow-y-auto shadow-2xl">
+              <PlannerPanel
+                pois={pois}
+                onClose={() => setPlannerOpen(false)}
+                onSelectPOI={handleSelectPOI}
+              />
+            </div>
+
+            {/* Mobile: full-screen overlay */}
+            <div className="md:hidden fixed inset-0 z-[3100] flex flex-col">
+              <PlannerPanel
+                pois={pois}
+                onClose={() => setPlannerOpen(false)}
+                onSelectPOI={handleSelectPOI}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

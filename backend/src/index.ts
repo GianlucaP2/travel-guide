@@ -1,6 +1,8 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { POIS } from './data/pois';
+import plannerRouter from './routes/planner';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -56,6 +58,9 @@ app.get('/api/pois/category/:category', (req, res) => {
   const filtered = POIS.filter(p => p.category === category);
   res.json(filtered);
 });
+
+// AI Trip Planner
+app.use('/api/planner', plannerRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
