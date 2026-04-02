@@ -87,6 +87,7 @@ export function usePlanner(allPois: POI[]) {
           address: p.address ?? '',
           hours: p.hours ?? 'flexible',
           price: p.price ?? '?',
+          bestTime: p.bestTime ?? '',
           lat: p.lat,
           lng: p.lng,
         })),

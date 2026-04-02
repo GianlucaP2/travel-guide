@@ -569,6 +569,7 @@ export const POIS: POI[] = [
   {
     id: 'bs-esalen',
     name: 'Esalen Hot Springs (Midnight Baths)',
+    bestTime: 'night',
     category: 'experience',
     tier: 2,
     lat: 36.1310,
@@ -1025,6 +1026,7 @@ export const POIS: POI[] = [
     name: 'El Matador State Beach',
     category: 'beach',
     tier: 1,
+    bestTime: 'sunset',
     lat: 34.0371,
     lng: -118.8756,
     description: 'The most photogenic beach in Southern California — rocky sea stacks, sea caves, and sea arches rise from turquoise water with dramatic cliffs above. Viral on Instagram, Pinterest, and TikTok every single day. Used in countless film and TV productions.',
@@ -1054,6 +1056,7 @@ export const POIS: POI[] = [
   {
     id: 'malibu-point-dume',
     name: 'Point Dume (Planet of the Apes Cliffs)',
+    bestTime: 'sunset',
     category: 'viewpoint',
     tier: 1,
     lat: 34.0012,
@@ -1069,6 +1072,7 @@ export const POIS: POI[] = [
   {
     id: 'malibu-pier',
     name: 'Malibu Pier & Surfrider Beach',
+    bestTime: 'sunset',
     category: 'landmark',
     tier: 2,
     lat: 34.0359,
@@ -1118,6 +1122,7 @@ export const POIS: POI[] = [
   {
     id: 'sm-pier',
     name: 'Santa Monica Pier',
+    bestTime: 'sunset',
     category: 'landmark',
     tier: 1,
     lat: 34.0100,
@@ -1133,6 +1138,7 @@ export const POIS: POI[] = [
   {
     id: 'venice-beach',
     name: 'Venice Beach Boardwalk',
+    bestTime: 'sunset',
     category: 'experience',
     tier: 1,
     lat: 33.9850,
@@ -1148,6 +1154,7 @@ export const POIS: POI[] = [
   {
     id: 'la-abbot-kinney',
     name: 'Abbot Kinney Boulevard',
+    bestTime: 'afternoon',
     category: 'experience',
     tier: 2,
     lat: 33.9877,
@@ -1165,6 +1172,7 @@ export const POIS: POI[] = [
   {
     id: 'la-griffith-observatory',
     name: 'Griffith Observatory',
+    bestTime: 'evening',
     category: 'landmark',
     tier: 1,
     lat: 34.1184,
@@ -1181,6 +1189,7 @@ export const POIS: POI[] = [
   {
     id: 'la-el-matador-beach',
     name: 'El Matador State Beach',
+    bestTime: 'sunset',
     category: 'beach',
     tier: 1,
     lat: 34.0391,
@@ -1213,6 +1222,7 @@ export const POIS: POI[] = [
   {
     id: 'la-point-dume',
     name: 'Point Dume State Beach & Reserve',
+    bestTime: 'sunset',
     category: 'viewpoint',
     tier: 1,
     lat: 34.0001,
@@ -1229,6 +1239,7 @@ export const POIS: POI[] = [
   {
     id: 'la-lacma-urban-light',
     name: 'LACMA — Urban Light',
+    bestTime: 'evening',
     category: 'landmark',
     tier: 1,
     lat: 34.0640,
@@ -1245,6 +1256,7 @@ export const POIS: POI[] = [
   {
     id: 'la-the-broad',
     name: 'The Broad Museum',
+    bestTime: 'morning',
     category: 'landmark',
     tier: 1,
     lat: 34.0541,
@@ -1261,6 +1273,7 @@ export const POIS: POI[] = [
   {
     id: 'la-getty-center',
     name: 'The Getty Center',
+    bestTime: 'afternoon',
     category: 'landmark',
     tier: 1,
     lat: 34.0783,
@@ -1471,6 +1484,7 @@ export const POIS: POI[] = [
   {
     id: 'la-gjusta',
     name: 'Gjusta Bakery & Deli (Venice)',
+    bestTime: 'morning',
     category: 'restaurant',
     tier: 1,
     lat: 33.9933,
@@ -1521,6 +1535,7 @@ export const POIS: POI[] = [
   {
     id: 'la-perch-rooftop',
     name: 'Perch Rooftop Bar (DTLA)',
+    bestTime: 'sunset',
     category: 'bar',
     tier: 1,
     lat: 34.0494,
@@ -1585,6 +1600,7 @@ export const POIS: POI[] = [
   {
     id: 'la-musso-frank',
     name: 'Musso & Frank Grill (Hollywood)',
+    bestTime: 'lunch',
     category: 'restaurant',
     tier: 1,
     lat: 34.1016,
@@ -1667,6 +1683,7 @@ export const POIS: POI[] = [
   {
     id: 'la-runyon-canyon',
     name: 'Runyon Canyon Park',
+    bestTime: 'morning',
     category: 'nature',
     tier: 2,
     lat: 34.1039,
@@ -1683,6 +1700,7 @@ export const POIS: POI[] = [
   {
     id: 'la-mulholland-drive',
     name: 'Mulholland Drive Viewpoints',
+    bestTime: 'sunset',
     category: 'viewpoint',
     tier: 1,
     lat: 34.1215,
@@ -1699,6 +1717,7 @@ export const POIS: POI[] = [
   {
     id: 'la-yamashiro',
     name: 'Yamashiro Hollywood',
+    bestTime: 'sunset',
     category: 'bar',
     tier: 2,
     lat: 34.1038,
@@ -1715,6 +1734,7 @@ export const POIS: POI[] = [
   {
     id: 'la-comedy-store',
     name: 'The Comedy Store (Sunset Strip)',
+    bestTime: 'evening',
     category: 'experience',
     tier: 1,
     lat: 34.0936,
@@ -1784,6 +1804,7 @@ export const POIS: POI[] = [
   {
     id: 'la-hollywood-bowl',
     name: 'Hollywood Bowl',
+    bestTime: 'evening',
     category: 'experience',
     tier: 1,
     lat: 34.1122,
@@ -1832,6 +1853,7 @@ export const POIS: POI[] = [
   {
     id: 'la-lake-hollywood-park',
     name: 'Lake Hollywood Park — Hollywood Sign View',
+    bestTime: 'morning',
     category: 'viewpoint',
     tier: 1,
     lat: 34.1316,
@@ -1960,6 +1982,7 @@ export const POIS: POI[] = [
   {
     id: 'la-sqirl',
     name: 'Sqirl (Silver Lake)',
+    bestTime: 'morning',
     category: 'restaurant',
     tier: 2,
     lat: 34.0875,
@@ -2138,6 +2161,7 @@ export const POIS: POI[] = [
   {
     id: 'la-high-rooftop-erwin',
     name: 'High Rooftop Lounge — Hotel Erwin',
+    bestTime: 'sunset',
     category: 'bar',
     tier: 1,
     lat: 34.0016,
@@ -2154,6 +2178,7 @@ export const POIS: POI[] = [
   {
     id: 'la-penthouse-huntley',
     name: 'The Penthouse — Huntley Hotel',
+    bestTime: 'sunset',
     category: 'bar',
     tier: 1,
     lat: 34.0187,
@@ -2170,6 +2195,7 @@ export const POIS: POI[] = [
   {
     id: 'la-ep-lp-rooftop',
     name: 'E.P. & L.P. Rooftop',
+    bestTime: 'sunset',
     category: 'bar',
     tier: 1,
     lat: 34.0788,
@@ -2186,6 +2212,7 @@ export const POIS: POI[] = [
   {
     id: 'la-roof-edition-weho',
     name: 'The Roof — West Hollywood EDITION',
+    bestTime: 'evening',
     category: 'bar',
     tier: 1,
     lat: 34.0910,
@@ -2202,6 +2229,7 @@ export const POIS: POI[] = [
   {
     id: 'la-tower-bar',
     name: 'Tower Bar — Sunset Tower Hotel',
+    bestTime: 'evening',
     category: 'bar',
     tier: 1,
     lat: 34.0908,
@@ -2218,6 +2246,7 @@ export const POIS: POI[] = [
   {
     id: 'la-skybar-mondrian',
     name: 'Skybar — Mondrian Hotel',
+    bestTime: 'evening',
     category: 'bar',
     tier: 2,
     lat: 34.0905,
@@ -2234,6 +2263,7 @@ export const POIS: POI[] = [
   {
     id: 'la-basement-tavern',
     name: 'Basement Tavern — Santa Monica Speakeasy',
+    bestTime: 'evening',
     category: 'bar',
     tier: 2,
     lat: 34.0051,
@@ -2250,6 +2280,7 @@ export const POIS: POI[] = [
   {
     id: 'la-del-monte-townhouse',
     name: 'Del Monte Speakeasy — Townhouse Venice',
+    bestTime: 'evening',
     category: 'bar',
     tier: 2,
     lat: 34.0020,

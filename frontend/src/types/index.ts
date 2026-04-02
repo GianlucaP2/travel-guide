@@ -48,6 +48,7 @@ export interface POI {
   name: string;
   category: Category;
   tier: Tier;
+  bestTime?: string;  // 'morning' | 'lunch' | 'afternoon' | 'sunset' | 'evening' | 'night'
   lat: number;
   lng: number;
   description: string;

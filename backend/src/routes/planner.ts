@@ -21,6 +21,7 @@ interface PlanPOI {
   address?: string;
   hours?: string;
   price?: string;
+  bestTime?: string;  // 'morning' | 'lunch' | 'afternoon' | 'sunset' | 'evening' | 'night'
   lat: number;
   lng: number;
 }
@@ -74,7 +75,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const poisText = (pois || [])
       .map(
         (p) =>
-          `[${p.id}] "${p.name}" | ${p.category} | tier ${p.tier} | ${p.region} | ${p.address || ''} | hours: ${p.hours || 'flexible'} | price: ${p.price || '?'} | coords: ${p.lat.toFixed(4)},${p.lng.toFixed(4)}`
+          `[${p.id}] "${p.name}" | ${p.category} | tier ${p.tier} | ${p.region} | hours: ${p.hours || 'flexible'} | best visit: ${p.bestTime || 'anytime'} | price: ${p.price || '?'} | coords: ${p.lat.toFixed(4)},${p.lng.toFixed(4)}`
       )
       .join('\n');
 
@@ -108,7 +109,7 @@ WEB SEARCH INSTRUCTIONS (you have internet access):
 - Note any relevant current-events context in slot "notes" fields (e.g. "This week: Art Night at LACMA")
 - If a venue has temporarily closed or changed hours, swap it for an alternative from the list`;
 
-    const systemPrompt = `You are an expert Los Angeles travel planner who creates realistic, geographically efficient daily itineraries. You have access to the web and should use it to verify current hours and find current events.
+    const systemPrompt = `You are an expert Los Angeles travel planner who creates realistic, geographically efficient daily itineraries. You have access to the web and should use it to verify current hours, find current events, and look up sunset times.
 
 PLANNING RULES:
 1. Daily sightseeing hours: ${start} – ${end}
@@ -120,6 +121,35 @@ PLANNING RULES:
 7. Prefer tier 1 and tier 2 venues over tier 3+
 8. ONLY use places from the provided list — do NOT invent new places
 9. Every slot must have both startTime and endTime in HH:MM (24h) format
+
+TIMING OPTIMIZATION (CRITICAL — must be strictly respected):
+Each POI in the list has a "best visit" time. This is NOT optional — it reflects when the venue is genuinely best:
+- "morning": Schedule before 12:00. Reason: cooler temps, sunrise light, no crowds. Examples: hiking trails, bakeries, quiet parks.
+- "lunch": Schedule 12:00–14:00. Classic daytime dining.
+- "afternoon": Schedule 13:00–17:00. Best light or opening hours favour this window.
+- "sunset": USE WEB SEARCH to find the exact sunset time for each travel date in Los Angeles. Then schedule the venue to START 45–60 min before sunset. This is non-negotiable for Venice Beach boardwalk, Santa Monica Pier, Malibu beaches, and rooftop bars — they are dramatically better at golden hour. Plan the day so the afternoon flows naturally toward the sunset location.
+- "evening": Schedule at 19:00 or later. Venue comes alive after dark.
+- "night": Schedule at 21:00 or later. Night-only or best-after-dark venue.
+- "anytime": Flexible — fill remaining slots.
+
+TIMING ENFORCEMENT EXAMPLES:
+✓ Venice Beach 18:00–19:30 (before ~19:30 sunset in spring) = CORRECT
+✗ Venice Beach 10:00–11:30 = WRONG — boardwalk lacks magic in harsh morning light
+✓ Griffith Observatory 20:00–22:00 = CORRECT — city lights + telescope after dark
+✗ Griffith Observatory 09:30–11:00 = WRONG — misses the entire point of going at dusk
+✓ LACMA Urban Light 19:30–21:00 = CORRECT — the lamp posts are spectacular at dusk/night
+✗ LACMA Urban Light 11:00–12:30 = WRONG — just looks like street furniture in daytime
+✓ Runyon Canyon 08:00–09:30 = CORRECT — cool air, sunrise, peaceful
+✗ Runyon Canyon 14:00–15:30 = WRONG — midday heat, crowded, no views worth it
+✓ Mulholland Drive 19:00–20:30 = CORRECT — city lights coming on at dusk
+✓ The Broad Museum 11:00–12:30 = CORRECT — first thing in the day beats the afternoon queues
+✓ Sqirl / Gjusta breakfast spot 09:00–10:30 = CORRECT — closes early, morning-only vibe
+
+SUNSET PLANNING WORKFLOW:
+1. Web-search the sunset time for LA on each specific travel date
+2. Work backwards from sunset: place the main sunset venue starting ~1h before sunset
+3. Place preceding afternoon activities so they end 30 min before the sunset departure
+4. If doing nightlife: rooftop bars are ideal to CONTINUE from sunset into early evening (they are listed as "sunset" or "evening")
 ${nightLifeRules}
 ${webSearchInstructions}
 
