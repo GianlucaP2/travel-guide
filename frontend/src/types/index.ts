@@ -120,3 +120,76 @@ export interface GPSState {
   tracking: boolean;
   following: boolean;
 }
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A single message in the trip-assistant conversation.
+ */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  /** Structured plan actions the AI proposes (assistant messages only) */
+  actions?: ChatAction[];
+  timestamp: number;
+}
+
+/**
+ * Discriminated union of every plan-modification action the AI can suggest.
+ * The frontend can apply these with one click.
+ */
+export type ChatAction =
+  | {
+      type: 'move_slot';
+      description: string;
+      remove: { date: string; poiId: string };
+      add: { date: string; poiId: string; poiName: string; startTime: string; endTime: string; notes?: string };
+    }
+  | {
+      type: 'swap_slot';
+      description: string;
+      date: string;
+      poiId: string;
+      newPoiId: string;
+      newPoiName: string;
+      startTime?: string;
+      endTime?: string;
+      newNotes?: string;
+    }
+  | {
+      type: 'reschedule_slot';
+      description: string;
+      date: string;
+      poiId: string;
+      newStartTime: string;
+      newEndTime: string;
+      newNotes?: string;
+    }
+  | {
+      type: 'add_note';
+      description: string;
+      date: string;
+      poiId: string;
+      note: string;
+    };
+
+// ─── User profile ─────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  id: string;             // UUID – stored in localStorage and backend
+  name: string;
+  interests: string[];    // Category ids
+  budgetLevel: BudgetLevel;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedPlan {
+  id: string;
+  profileId: string;
+  label: string;          // e.g. "LA Trip — Apr 2026"
+  planData: string;       // JSON-stringified TripPlan
+  createdAt: string;
+  updatedAt: string;
+}

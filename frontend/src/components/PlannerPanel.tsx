@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { POI, PlannerConfig, Category, BudgetLevel } from '../types';
+import { POI, PlannerConfig, Category, BudgetLevel, ChatAction, TripPlan } from '../types';
 import { usePlanner } from '../hooks/usePlanner';
+import { useChat } from '../hooks/useChat';
+import ChatPanel from './ChatPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LA_ZONES = [
@@ -61,10 +63,12 @@ interface Props {
   pois: POI[];
   onClose: () => void;
   onSelectPOI?: (poi: POI) => void;
+  onSavePlan?: (plan: TripPlan) => void;
+  isSavingPlan?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
+export default function PlannerPanel({ pois, onClose, onSelectPOI, onSavePlan, isSavingPlan }: Props) {
   const {
     plan,
     status,
@@ -78,8 +82,16 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
     markDone,
     replan,
     swapSlot,
+    applyAction,
     clearPlan,
   } = usePlanner(pois);
+
+  // ── Chat ────────────────────────────────────────────────────────────────────
+  const { messages: chatMessages, isLoading: chatLoading, sendMessage, clearChat } = useChat();
+  const [chatView, setChatView] = useState(false);
+
+  // Reset chat view when plan changes
+  useEffect(() => { if (status !== 'ready') setChatView(false); }, [status]);
 
   // ── Config form state ──────────────────────────────────────────────────────
   const today = new Date();
@@ -436,12 +448,25 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
                   {doneSlots}/{totalSlots} completed
                 </p>
               </div>
-              <button
-                onClick={clearPlan}
-                className="text-[11px] text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
-              >
-                New Plan
-              </button>
+              <div className="flex items-center gap-1.5">
+                {/* Save to profile */}
+                {onSavePlan && (
+                  <button
+                    onClick={() => onSavePlan(plan)}
+                    disabled={isSavingPlan}
+                    title="Save plan to profile"
+                    className="text-[11px] text-gray-400 hover:text-ocean-400 transition-colors px-2 py-1 rounded-lg hover:bg-white/5 disabled:opacity-40 flex items-center gap-1"
+                  >
+                    {isSavingPlan ? '…' : '💾'}
+                  </button>
+                )}
+                <button
+                  onClick={clearPlan}
+                  className="text-[11px] text-gray-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
+                >
+                  New Plan
+                </button>
+              </div>
             </div>
             {/* Progress bar */}
             <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
@@ -476,83 +501,124 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
             )}
           </div>
 
-          {/* Day accordion */}
-          <div className="flex-1 overflow-y-auto">
-            {plan.days.map((day) => {
-              const dayDone = day.slots.filter((s) => s.done).length;
-              const dayTotal = day.slots.length;
-              const isExpanded = expandedDay === day.date;
+          {/* ── Plan / Chat tab bar ──────────────────────────────────── */}
+          <div className="flex border-b border-white/10 flex-shrink-0">
+            <button
+              onClick={() => setChatView(false)}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
+                !chatView ? 'text-ocean-400 border-b-2 border-ocean-400' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              📋 Itinerary
+            </button>
+            <button
+              onClick={() => setChatView(true)}
+              className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                chatView ? 'text-ocean-400 border-b-2 border-ocean-400' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              💬 Ask AI
+              {chatMessages.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-ocean-500/30 text-ocean-300 text-[10px] flex items-center justify-center font-bold">
+                  {chatMessages.filter((m) => m.role === 'assistant').length}
+                </span>
+              )}
+            </button>
+          </div>
 
-              return (
-                <div key={day.date} className="border-b border-white/5">
-                  {/* Day header */}
-                  <button
-                    onClick={() => setExpandedDay(isExpanded ? null : day.date)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors ${
-                        dayDone === dayTotal && dayTotal > 0
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-ocean-500/20 text-ocean-400'
-                      }`}
-                    >
-                      {dayDone === dayTotal && dayTotal > 0 ? '✓' : dayTotal > 0 ? dayDone : '—'}
-                    </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{day.label}</p>
-                      <p className="text-[11px] text-gray-500">
-                        {dayDone}/{dayTotal} done
-                      </p>
-                    </div>
-                    <span
-                      className={`text-gray-500 text-xs transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    >
-                      ▾
-                    </span>
-                  </button>
+          {/* ── Chat view ─────────────────────────────────────────────── */}
+          {chatView && (
+            <div className="flex-1 min-h-0">
+              <ChatPanel
+                plan={plan}
+                messages={chatMessages}
+                isLoading={chatLoading}
+                onSendMessage={(text) => sendMessage(text, plan)}
+                onApplyAction={(action: ChatAction) => applyAction(action)}
+                onClearChat={clearChat}
+              />
+            </div>
+          )}
 
-                  {/* Slots */}
-                  {isExpanded && (
-                    <div className="pb-2 space-y-0.5 px-3">
-                      {day.slots.map((slot, idx) => {
-                        const isSwapOpen = openSwap?.date === day.date && openSwap?.poiId === slot.poiId;
-                        const isSwapping = swappingSlotId === slot.poiId;
-                        return (
-                          <React.Fragment key={`${slot.poiId}-${idx}`}>
-                            <SlotRow
-                              slot={slot}
-                              date={day.date}
-                              isSwapOpen={isSwapOpen}
-                              isSwapping={isSwapping}
-                              onToggle={(done) => markDone(day.date, slot.poiId, done)}
-                              onViewMap={() => handleViewOnMap(slot.poiId)}
-                              onToggleSwap={() => {
-                                setOpenSwap(isSwapOpen ? null : { date: day.date, poiId: slot.poiId });
-                                setSwapError(null);
-                              }}
-                            />
-                            {isSwapOpen && (
-                              <SwapDrawer
+          {/* ── Day accordion (itinerary view) ────────────────────────── */}
+          {!chatView && (
+            <div className="flex-1 overflow-y-auto">
+              {plan.days.map((day) => {
+                const dayDone = day.slots.filter((s) => s.done).length;
+                const dayTotal = day.slots.length;
+                const isExpanded = expandedDay === day.date;
+
+                return (
+                  <div key={day.date} className="border-b border-white/5">
+                    {/* Day header */}
+                    <button
+                      onClick={() => setExpandedDay(isExpanded ? null : day.date)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors ${
+                          dayDone === dayTotal && dayTotal > 0
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-ocean-500/20 text-ocean-400'
+                        }`}
+                      >
+                        {dayDone === dayTotal && dayTotal > 0 ? '✓' : dayTotal > 0 ? dayDone : '—'}
+                      </div>
+                      <div className="flex-1 text-left min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{day.label}</p>
+                        <p className="text-[11px] text-gray-500">
+                          {dayDone}/{dayTotal} done
+                        </p>
+                      </div>
+                      <span
+                        className={`text-gray-500 text-xs transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      >
+                        ▾
+                      </span>
+                    </button>
+
+                    {/* Slots */}
+                    {isExpanded && (
+                      <div className="pb-2 space-y-0.5 px-3">
+                        {day.slots.map((slot, idx) => {
+                          const isSwapOpen = openSwap?.date === day.date && openSwap?.poiId === slot.poiId;
+                          const isSwapping = swappingSlotId === slot.poiId;
+                          return (
+                            <React.Fragment key={`${slot.poiId}-${idx}`}>
+                              <SlotRow
                                 slot={slot}
                                 date={day.date}
-                                allPois={laPois}
-                                daySlots={day.slots}
+                                isSwapOpen={isSwapOpen}
                                 isSwapping={isSwapping}
-                                error={swapError}
-                                onSwap={(prompt: string) => handleSwap(day.date, slot.poiId, prompt)}
-                                onClose={() => { setOpenSwap(null); setSwapError(null); }}
+                                onToggle={(done) => markDone(day.date, slot.poiId, done)}
+                                onViewMap={() => handleViewOnMap(slot.poiId)}
+                                onToggleSwap={() => {
+                                  setOpenSwap(isSwapOpen ? null : { date: day.date, poiId: slot.poiId });
+                                  setSwapError(null);
+                                }}
                               />
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                              {isSwapOpen && (
+                                <SwapDrawer
+                                  slot={slot}
+                                  date={day.date}
+                                  allPois={laPois}
+                                  daySlots={day.slots}
+                                  isSwapping={isSwapping}
+                                  error={swapError}
+                                  onSwap={(prompt: string) => handleSwap(day.date, slot.poiId, prompt)}
+                                  onClose={() => { setOpenSwap(null); setSwapError(null); }}
+                                />
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

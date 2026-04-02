@@ -25,6 +25,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled output from build stage
 COPY --from=builder /app/dist ./dist
 
+# Persistent data directory (override with volume mount in k8s)
+RUN mkdir -p /data
+
 EXPOSE 3001
 
 # Healthcheck matches /api/health → { "status": "healthy" }

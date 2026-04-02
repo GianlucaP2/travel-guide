@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import OpenAI from 'openai';
+import { POIS } from '../data/pois';
 
 const router = express.Router();
 
@@ -358,6 +359,142 @@ Return ONLY a valid JSON object (no markdown):
   } catch (err: any) {
     console.error('[planner/swap] error:', err.message);
     res.status(500).json({ error: err.message || 'Failed to swap slot' });
+  }
+});
+
+// ─── POST /api/planner/chat ───────────────────────────────────────────────────
+// Conversational AI about the trip plan — can answer questions, suggest changes,
+// and return structured actions for the frontend to apply.
+router.post('/chat', async (req: Request, res: Response) => {
+  try {
+    const { messages, plan } = req.body as {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+      plan: {
+        zone: string;
+        days: DayPlan[];
+        startHour: string;
+        endHour: string;
+        nightLife: boolean;
+        budgetLevel: number;
+      };
+    };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+    if (!plan || !plan.days) {
+      return res.status(400).json({ error: 'plan is required' });
+    }
+
+    const openai = getOpenAI();
+
+    // ── Build full plan context ──────────────────────────────────────────────
+    const planPoiIds = new Set(plan.days.flatMap((d) => d.slots.map((s) => s.poiId)));
+
+    // Look up full POI details from the server-side POIS list
+    const poiMap = new Map(POIS.map((p) => [p.id, p]));
+    const detailLines = [...planPoiIds]
+      .map((id) => {
+        const p = poiMap.get(id);
+        if (!p) return null;
+        return `[${p.id}] ${p.name} (${p.category}, ${p.region})\n  Hours: ${p.hours ?? 'flexible'} | Price: ${p.price ?? 'free'} | Best time: ${p.bestTime ?? 'anytime'}\n  ${p.description}\n  Tips: ${p.tips ?? 'none'}`;
+      })
+      .filter(Boolean)
+      .join('\n\n');
+
+    // Plan context with actual day-of-week
+    const planContext = plan.days
+      .map((day) => {
+        const dt = new Date(day.date + 'T12:00:00');
+        const dow = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        const slots = day.slots
+          .map((s) => `  ${s.startTime}–${s.endTime}: ${s.poiName}${s.notes ? ` (${s.notes})` : ''}${s.done ? ' ✓done' : ''}`)
+          .join('\n');
+        return `${dow}\n${slots || '  (no slots)'}`;
+      })
+      .join('\n\n');
+
+    const today = new Date().toISOString().split('T')[0];
+    const todayDow = new Date(today + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' });
+
+    const systemPrompt = `You are a knowledgeable and friendly Los Angeles travel companion. The user has an AI-generated trip plan and is chatting with you to ask questions, get clarifications, or request modifications.
+
+TODAY: ${today} (${todayDow})
+
+THE TRIP PLAN (${plan.zone}, budget level ${plan.budgetLevel}/4):
+${planContext}
+
+FULL DETAILS OF PLACES IN THE PLAN:
+${detailLines}
+
+YOUR CAPABILITIES:
+1. Answer questions about the plan (day-of-week crowd levels, opening hours, free-entry days, seasonal tips)
+2. Suggest improvements based on your LA expertise
+3. Propose specific plan modifications using structured "actions"
+4. Use web search to verify current hours, special events, and real-time info
+
+KEY LA KNOWLEDGE YOU MUST APPLY:
+- Getty Center: free entry every Thursday evening 5–9pm; quieter on weekday mornings than weekends
+- LACMA: closed Wednesdays; Urban Light installation is spectacular at dusk/night
+- Griffith Observatory: closed Mondays and Tuesdays; packed on weekend evenings; better midweek
+- Venice Beach: more vibrant and lively on weekends; quieter/chill on weekdays
+- The Broad: closed Mondays; free "FIRST Thursday" evenings 5–8pm
+- Universal Studios: less crowded on weekdays, especially Tuesday–Thursday
+- Hollywood Walk of Fame: fine any day but mornings before 10am avoid the worst heat and tour groups
+- Santa Monica Pier: gorgeous at sunset any day; weekday sunsets much less crowded
+- Runyon Canyon: best early morning (7–9am) to beat heat and find parking
+- Farmers Markets: WeHo Sunday morning, Hollywood Sunday morning, DTLA Saturday morning
+
+STRUCTURED ACTIONS (include in response when suggesting plan changes):
+You can propose these action types. The user can apply them with one click.
+
+"move_slot": Move a slot from one day to another
+  - remove: { date, poiId }
+  - add: { date, poiId, poiName, startTime, endTime, notes? }
+
+"swap_slot": Replace a slot with a different POI (use exact poiId and poiName from the plan)
+  - date, poiId, newPoiId, newPoiName, startTime?, endTime?, newNotes?
+
+"reschedule_slot": Change the time of an existing slot (keep same POI, same day)
+  - date, poiId, newStartTime, newEndTime, newNotes?
+
+"add_note": Add/update a note on a slot
+  - date, poiId, note
+
+RESPONSE FORMAT — return ONLY valid JSON, no markdown fences:
+{
+  "message": "Your friendly, conversational response here. Be specific about WHY a day of week matters. Use web search for current info when helpful.",
+  "actions": [
+    {
+      "type": "move_slot",
+      "description": "Short label shown to user on the Apply button",
+      "remove": { "date": "YYYY-MM-DD", "poiId": "exact-poi-id" },
+      "add": { "date": "YYYY-MM-DD", "poiId": "exact-poi-id", "poiName": "Exact Name", "startTime": "HH:MM", "endTime": "HH:MM", "notes": "why this works" }
+    }
+  ]
+}
+
+IMPORTANT: Only include "actions" when proposing a concrete change. For questions and answers with no change, just return { "message": "..." } with no actions key.`;
+
+    const input: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ];
+
+    const response = await openai.responses.create({
+      model: 'gpt-4o',
+      tools: [{ type: 'web_search_preview' }],
+      input,
+    });
+
+    const rawText = response.output_text;
+    if (!rawText) throw new Error('Empty response from GPT-4o');
+
+    const result = JSON.parse(extractJSON(rawText)) as { message: string; actions?: unknown[] };
+    res.json(result);
+  } catch (err: any) {
+    console.error('[planner/chat] error:', err.message);
+    res.status(500).json({ error: err.message || 'Chat failed' });
   }
 });
 

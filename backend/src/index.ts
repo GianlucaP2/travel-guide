@@ -1,8 +1,15 @@
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import { POIS } from './data/pois';
 import plannerRouter from './routes/planner';
+import profilesRouter from './routes/profiles';
+
+// Ensure data directory exists on startup
+const DATA_DIR = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -61,6 +68,9 @@ app.get('/api/pois/category/:category', (req, res) => {
 
 // AI Trip Planner
 app.use('/api/planner', plannerRouter);
+
+// User profiles + saved plans
+app.use('/api/profiles', profilesRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

@@ -1,25 +1,30 @@
 import React, { useState, useCallback } from 'react';
-import { POI } from './types';
+import { POI, TripPlan } from './types';
 import { useGPS } from './hooks/useGPS';
 import { usePOIs } from './hooks/usePOIs';
 import { useProximityNotifications } from './hooks/useProximityNotifications';
+import { useProfile } from './hooks/useProfile';
 import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
 import POIDetail from './components/POIDetail';
 import GPSButton from './components/GPSButton';
 import NotificationToast from './components/NotificationToast';
 import PlannerPanel from './components/PlannerPanel';
+import ProfileModal from './components/ProfileModal';
 
 export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const { gps, startTracking, stopTracking, setFollowing } = useGPS();
   const {
     pois, filtered, filters, loading, error,
     toggleCategory, toggleTier, toggleRegion, setSearch, clearFilters,
   } = usePOIs();
+
+  const profileHook = useProfile();
 
   // Fire in-app toasts + OS notifications when approaching a POI
   const { alerts, dismissAlert } = useProximityNotifications(filtered, gps);
@@ -34,6 +39,10 @@ export default function App() {
     setFollowing(!gps.following);
     if (!gps.tracking) startTracking();
   }, [gps.following, gps.tracking, setFollowing, startTracking]);
+
+  const handleSavePlan = useCallback(async (plan: TripPlan) => {
+    await profileHook.savePlan(plan);
+  }, [profileHook]);
 
   const activeFilterCount =
     filters.categories.size + filters.tiers.size + filters.regions.size +
@@ -116,6 +125,21 @@ export default function App() {
               onToggleFollow={handleToggleFollow}
             />
 
+            {/* Profile button */}
+            <button
+              onClick={() => setProfileOpen(v => !v)}
+              title="My Profile &amp; saved plans"
+              className={`flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
+                profileOpen
+                  ? 'glass bg-ocean-500/20 border-ocean-400 text-ocean-300'
+                  : 'glass border-white/10 text-white hover:border-ocean-400'
+              }`}
+            >
+              <span className="text-base">
+                {profileHook.profile?.name ? profileHook.profile.name[0].toUpperCase() : '👤'}
+              </span>
+            </button>
+
             {/* Trip Planner button */}
             <button
               onClick={() => setPlannerOpen(v => !v)}
@@ -189,6 +213,8 @@ export default function App() {
                 pois={pois}
                 onClose={() => setPlannerOpen(false)}
                 onSelectPOI={handleSelectPOI}
+                onSavePlan={handleSavePlan}
+                isSavingPlan={profileHook.isSaving}
               />
             </div>
 
@@ -198,9 +224,26 @@ export default function App() {
                 pois={pois}
                 onClose={() => setPlannerOpen(false)}
                 onSelectPOI={handleSelectPOI}
+                onSavePlan={handleSavePlan}
+                isSavingPlan={profileHook.isSaving}
               />
             </div>
           </>
+        )}
+
+        {/* ── Profile modal ──────────────────────────────────────────── */}
+        {profileOpen && (
+          <ProfileModal
+            profileHook={profileHook}
+            onClose={() => setProfileOpen(false)}
+            onLoadPlan={(plan) => {
+              // Put the plan back into usePlanner's localStorage key so it auto-loads
+              try {
+                localStorage.setItem('tg_plan_v1', JSON.stringify(plan));
+                window.location.reload();
+              } catch { /* ignore */ }
+            }}
+          />
         )}
       </div>
     </div>

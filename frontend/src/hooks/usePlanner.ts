@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { POI, PlanSlot, DayPlan, TripPlan, PlannerConfig, BudgetLevel, Category } from '../types';
+import { POI, PlanSlot, DayPlan, TripPlan, PlannerConfig, BudgetLevel, Category, ChatAction } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const STORAGE_KEY = 'tg_plan_v1';
@@ -367,6 +367,82 @@ export function usePlanner(allPois: POI[]) {
     [plan, laPois, setPlanInner]
   );
 
+  // ── Apply a chat action to the plan ─────────────────────────────────────────
+  const applyAction = useCallback((action: ChatAction) => {
+    setPlanInner((prev) => {
+      if (!prev) return prev;
+      let updated: TripPlan = { ...prev };
+
+      if (action.type === 'move_slot') {
+        updated = {
+          ...updated,
+          days: updated.days.map((d) => {
+            if (d.date === action.remove.date) {
+              return { ...d, slots: d.slots.filter((s) => s.poiId !== action.remove.poiId) };
+            }
+            if (d.date === action.add.date) {
+              const newSlot: PlanSlot = { ...action.add, done: false };
+              const slots = [...d.slots, newSlot].sort((a, b) => a.startTime.localeCompare(b.startTime));
+              return { ...d, slots };
+            }
+            return d;
+          }),
+        };
+      } else if (action.type === 'swap_slot') {
+        updated = {
+          ...updated,
+          days: updated.days.map((d) => {
+            if (d.date !== action.date) return d;
+            return {
+              ...d,
+              slots: d.slots.map((s) =>
+                s.poiId !== action.poiId
+                  ? s
+                  : {
+                      poiId: action.newPoiId,
+                      poiName: action.newPoiName,
+                      startTime: action.startTime ?? s.startTime,
+                      endTime: action.endTime ?? s.endTime,
+                      notes: action.newNotes ?? '',
+                      done: false,
+                    }
+              ),
+            };
+          }),
+        };
+      } else if (action.type === 'reschedule_slot') {
+        updated = {
+          ...updated,
+          days: updated.days.map((d) => {
+            if (d.date !== action.date) return d;
+            return {
+              ...d,
+              slots: d.slots.map((s) =>
+                s.poiId !== action.poiId
+                  ? s
+                  : { ...s, startTime: action.newStartTime, endTime: action.newEndTime, notes: action.newNotes ?? s.notes }
+              ),
+            };
+          }),
+        };
+      } else if (action.type === 'add_note') {
+        updated = {
+          ...updated,
+          days: updated.days.map((d) => {
+            if (d.date !== action.date) return d;
+            return {
+              ...d,
+              slots: d.slots.map((s) => (s.poiId !== action.poiId ? s : { ...s, notes: action.note })),
+            };
+          }),
+        };
+      }
+
+      saveToStorage(updated);
+      return updated;
+    });
+  }, []);
+
   // ── Clear plan ─────────────────────────────────────────────────────────────
   const clearPlan = useCallback(() => {
     setPlan(null);
@@ -399,6 +475,7 @@ export function usePlanner(allPois: POI[]) {
     markDone,
     replan,
     swapSlot,
+    applyAction,
     clearPlan,
   };
 }
