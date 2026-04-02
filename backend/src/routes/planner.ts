@@ -16,7 +16,7 @@ interface PlanPOI {
   id: string;
   name: string;
   category: string;
-  tier: number;
+  tier: number;  // 0 = iconic must-see, 1 = top pick, 2 = recommended, 3-4 = worth visiting
   region: string;
   address?: string;
   hours?: string;
@@ -55,13 +55,15 @@ function extractJSON(text: string): string {
 // ─── POST /api/planner/generate ──────────────────────────────────────────────
 router.post('/generate', async (req: Request, res: Response) => {
   try {
-    const { zone, dates, startHour, endHour, nightLife, nightEndHour, pois } = req.body as {
+    const { zone, dates, startHour, endHour, nightLife, nightEndHour, categories, budgetLevel, pois } = req.body as {
       zone: string;
       dates: string[];
       startHour: string;
       endHour: string;
       nightLife?: boolean;
       nightEndHour?: string;
+      categories?: string[];
+      budgetLevel?: number;
       pois: PlanPOI[];
     };
 
@@ -118,9 +120,19 @@ PLANNING RULES:
 4. Meals: lunch 12:00–14:00 (90 min); dinner 19:00–21:00 (90 min) when nightlife is enabled, otherwise 18:30–20:30
 5. Time per venue: restaurants 90 min, viewpoints 30–45 min, landmarks 60–120 min, experiences 2–4 h, bars 60–90 min
 6. Select 3–5 daytime attractions + 1 lunch + dinner + (if nightlife) 1–2 evening bars
-7. Prefer tier 1 and tier 2 venues over tier 3+
-8. ONLY use places from the provided list — do NOT invent new places
-9. Every slot must have both startTime and endTime in HH:MM (24h) format
+7. ONLY use places from the provided list — do NOT invent new places
+8. Every slot must have both startTime and endTime in HH:MM (24h) format
+
+TIER 0 — ICONIC MUST-SEES (highest priority):
+- POIs marked "tier 0" are iconic landmarks that travellers MUST NOT miss
+- Spread all tier 0 POIs across the trip — every tier 0 place MUST appear at least once
+- If a tier 0 venue is in the list, include it. Do not skip or deprioritise it
+- After tier 0, prefer tier 1 then tier 2
+
+BUDGET GUIDANCE (budget level: ${budgetLevel ?? 3}/4):
+- 1=Thrifty (Free/$), 2=Moderate ($$), 3=Comfortable ($$$), 4=Luxury ($$$$)
+- The POI list has already been filtered to your budget — all included venues are within budget
+- For restaurants, lean toward the lower-price options unless the user's budget is 3–4
 
 TIMING OPTIMIZATION (CRITICAL — must be strictly respected):
 Each POI in the list has a "best visit" time. This is NOT optional — it reflects when the venue is genuinely best:
@@ -188,7 +200,7 @@ Please use web search to:
 Available places (use ONLY from this list):
 ${poisText}
 
-Create an optimised ${dayCount}-day plan. Cluster nearby attractions on the same day to minimise travel. Include lunch every day.${useNightLife ? ' Include dinner + 1–2 evening bar/rooftop stops every day.' : ''} Prioritise tier 1 venues. Return only the JSON object.`;
+Create an optimised ${dayCount}-day plan. Cluster nearby attractions on the same day to minimise travel. Include lunch every day.${useNightLife ? ' Include dinner + 1–2 evening bar/rooftop stops every day.' : ''} MUST include all tier 0 (iconic) venues. Then prioritise tier 1. Return only the JSON object.`;
 
     const response = await openai.responses.create({
       model: 'gpt-4o',

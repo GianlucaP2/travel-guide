@@ -124,7 +124,7 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
           key={poi.id}
           position={[poi.lat, poi.lng]}
           icon={createPOIIcon(poi, selectedPOI?.id === poi.id)}
-          zIndexOffset={poi.tier === 1 ? 1000 : poi.tier === 2 ? 500 : 0}
+          zIndexOffset={poi.tier === 0 ? 2000 : poi.tier === 1 ? 1000 : poi.tier === 2 ? 500 : 0}
           eventHandlers={{
             click: () => onSelectPOI(poi),
           }}
@@ -173,7 +173,7 @@ function PopupWikiImage({ poi }: { poi: POI }) {
 
 // ── Compact popup card inside the Leaflet popup ──────────────────────────────
 function POIPopup({ poi, onExpand, isSelected }: { poi: POI; onExpand: () => void; isSelected: boolean }) {
-  const tierLabels: Record<number, string> = { 1: 'Must-See', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
+  const tierLabels: Record<number, string> = { 0: '⭐ Iconic', 1: 'Top Pick', 2: 'Recommended', 3: 'Worth a visit', 4: 'If passing by' };
 
   return (
     <div className="min-w-[220px] max-w-[280px] overflow-hidden">
@@ -195,7 +195,7 @@ function POIPopup({ poi, onExpand, isSelected }: { poi: POI; onExpand: () => voi
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm leading-tight text-white pr-4">{poi.name}</div>
             <div className="text-xs mt-0.5" style={{ color: tierColor(poi.tier) }}>
-              {'★'.repeat(5 - poi.tier)}{'☆'.repeat(poi.tier - 1)} {tierLabels[poi.tier]}
+              {poi.tier === 0 ? '⭐ Iconic' : tierLabels[poi.tier]}
             </div>
           </div>
         </div>

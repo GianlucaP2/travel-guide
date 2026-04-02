@@ -1,16 +1,19 @@
-export type Tier = 1 | 2 | 3 | 4;
+export type Tier = 0 | 1 | 2 | 3 | 4;  // 0 = iconic must-see
 
 export type Category =
   | 'beach'
   | 'viewpoint'
   | 'restaurant'
   | 'bar'
+  | 'museum'
   | 'landmark'
   | 'nature'
   | 'experience'
   | 'camping'
   | 'shopping'
   | 'accommodation';
+
+export type BudgetLevel = 1 | 2 | 3 | 4;
 
 export type Region =
   | 'San Francisco'

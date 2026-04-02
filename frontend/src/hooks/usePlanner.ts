@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { POI, PlanSlot, DayPlan, TripPlan, PlannerConfig } from '../types';
+import { POI, PlanSlot, DayPlan, TripPlan, PlannerConfig, BudgetLevel, Category } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 const STORAGE_KEY = 'tg_plan_v1';
@@ -34,6 +34,29 @@ function generateDateRange(startDate: string, endDate: string): string[] {
     cur.setDate(cur.getDate() + 1);
   }
   return dates;
+}
+
+// Map a freeform price string to a numeric budget level (1–4)
+function priceToBudget(price?: string): BudgetLevel {
+  if (!price) return 2;
+  const p = price.toLowerCase().trim();
+  if (p === 'free' || p.startsWith('free')) return 1;
+  // Count $ signs ($$$$=4, $$$=3, $$=2, $=1)
+  const dollars = (price.match(/\$/g) || []).length;
+  if (dollars >= 4) return 4;
+  if (dollars >= 3) return 3;
+  if (dollars >= 2) return 2;
+  if (dollars >= 1) return 1;
+  // Numeric dollar amounts like '$30/person', '$15 adults'
+  const match = p.match(/\$(\d+)/);
+  if (match) {
+    const amt = parseInt(match[1]);
+    if (amt <= 20) return 1;
+    if (amt <= 60) return 2;
+    if (amt <= 150) return 3;
+    return 4;
+  }
+  return 1;
 }
 
 function nowHHMM(): string {
@@ -114,6 +137,14 @@ export function usePlanner(allPois: POI[]) {
       const dates = generateDateRange(cfg.startDate, cfg.endDate);
 
       try {
+        // Filter POIs: tier 0 (iconic) always included; others filtered by category + budget
+        const filteredPois = laPois.filter((p) => {
+          if (p.tier === 0) return true; // iconic must-sees always in
+          if (!cfg.categories.includes(p.category as Category)) return false;
+          if (priceToBudget(p.price) > cfg.budgetLevel) return false;
+          return true;
+        });
+
         const resp = await fetch(`${API_BASE}/api/planner/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -124,7 +155,9 @@ export function usePlanner(allPois: POI[]) {
             endHour: cfg.endHour,
             nightLife: cfg.nightLife,
             nightEndHour: cfg.nightEndHour,
-            pois: laPois,
+            categories: cfg.categories,
+            budgetLevel: cfg.budgetLevel,
+            pois: filteredPois,
           }),
         });
 
@@ -144,6 +177,8 @@ export function usePlanner(allPois: POI[]) {
           endHour: cfg.endHour,
           nightLife: cfg.nightLife,
           nightEndHour: cfg.nightEndHour,
+          categories: cfg.categories,
+          budgetLevel: cfg.budgetLevel,
         };
 
         setPlan(newPlan);

@@ -5,11 +5,11 @@ import { CATEGORY_EMOJI, CATEGORY_LABEL, tierColor, tierBadge } from '../utils/m
 import { POIS } from '../data/pois';
 
 const ALL_CATEGORIES: Category[] = [
-  'beach', 'viewpoint', 'restaurant', 'bar', 'landmark',
+  'beach', 'viewpoint', 'restaurant', 'bar', 'museum', 'landmark',
   'nature', 'experience', 'camping', 'shopping', 'accommodation',
 ];
 
-const ALL_TIERS: Tier[] = [1, 2, 3, 4];
+const ALL_TIERS: Tier[] = [0, 1, 2, 3, 4];
 
 // Ordered list of regions north→south
 const ORDERED_REGIONS: Region[] = [

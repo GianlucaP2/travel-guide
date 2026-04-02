@@ -1,16 +1,20 @@
-export type Tier = 1 | 2 | 3 | 4;
+export type Tier = 0 | 1 | 2 | 3 | 4;  // 0 = iconic must-see
 
 export type Category =
   | 'beach'
   | 'viewpoint'
   | 'restaurant'
   | 'bar'
+  | 'museum'
   | 'landmark'
   | 'nature'
   | 'experience'
   | 'camping'
   | 'shopping'
   | 'accommodation';
+
+// 1=Thrifty (Free/$)  2=Moderate ($$)  3=Comfortable ($$$)  4=Luxury ($$$$)
+export type BudgetLevel = 1 | 2 | 3 | 4;
 
 export type Region =
   | 'San Francisco'
@@ -87,6 +91,8 @@ export interface TripPlan {
   endHour: string;
   nightLife: boolean;
   nightEndHour: string; // e.g. "00:00" = midnight
+  categories: Category[];
+  budgetLevel: BudgetLevel;
 }
 
 export interface PlannerConfig {
@@ -97,6 +103,8 @@ export interface PlannerConfig {
   endHour: string;   // "21:00"
   nightLife: boolean;    // include dinner + after-dinner bars/rooftops
   nightEndHour: string;  // e.g. "00:00" = midnight, "02:00" = 2am
+  categories: Category[]; // which POI categories to include
+  budgetLevel: BudgetLevel; // 1=Thrifty 2=Moderate 3=Comfortable 4=Luxury
 }
 
 // ─── GPS ─────────────────────────────────────────────────────────────────────

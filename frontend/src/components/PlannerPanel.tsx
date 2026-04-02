@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { POI, PlannerConfig } from '../types';
+import { POI, PlannerConfig, Category, BudgetLevel } from '../types';
 import { usePlanner } from '../hooks/usePlanner';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -23,6 +23,24 @@ const NIGHT_HOUR_OPTIONS: { value: string; label: string }[] = [
   { value: '00:00', label: 'Midnight' },
   { value: '01:00', label: '1:00 AM' },
   { value: '02:00', label: '2:00 AM' },
+];
+
+// Interest groups — each maps to one or more POI categories
+const INTEREST_GROUPS: { id: string; emoji: string; label: string; categories: Category[] }[] = [
+  { id: 'nature',    emoji: '🌿', label: 'Nature',       categories: ['nature', 'beach', 'viewpoint', 'camping'] },
+  { id: 'food',      emoji: '🍽️', label: 'Food',         categories: ['restaurant'] },
+  { id: 'bars',      emoji: '🍸', label: 'Bars',         categories: ['bar'] },
+  { id: 'city',      emoji: '🏙️', label: 'City Life',    categories: ['landmark', 'experience', 'shopping'] },
+  { id: 'museums',   emoji: '🏛️', label: 'Museums',      categories: ['museum'] },
+];
+
+const ALL_NON_MUSEUM_CATEGORIES: Category[] = ['nature', 'beach', 'viewpoint', 'camping', 'restaurant', 'bar', 'landmark', 'experience', 'shopping'];
+
+const BUDGET_OPTIONS: { level: BudgetLevel; emoji: string; label: string; sublabel: string; color: string }[] = [
+  { level: 1, emoji: '🌱', label: 'Thrifty',     sublabel: 'Free / $',   color: 'text-green-400 border-green-500/40 bg-green-500/10' },
+  { level: 2, emoji: '💰', label: 'Moderate',    sublabel: '$$',          color: 'text-sky-400 border-sky-500/40 bg-sky-500/10' },
+  { level: 3, emoji: '✨', label: 'Comfortable', sublabel: '$$$',         color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+  { level: 4, emoji: '💎', label: 'Luxury',      sublabel: '$$$$',        color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' },
 ];
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -72,6 +90,11 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
   const [endHour, setEndHour] = useState('21:00');
   const [nightLife, setNightLife] = useState(true);
   const [nightEndHour, setNightEndHour] = useState('00:00');
+  // New: interest groups (museums off by default) + budget
+  const [activeGroups, setActiveGroups] = useState<Set<string>>(
+    new Set(['nature', 'food', 'bars', 'city'])
+  );
+  const [budgetLevel, setBudgetLevel] = useState<BudgetLevel>(3);
 
   // ── Expanded day ───────────────────────────────────────────────────────────
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -85,7 +108,17 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
 
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handleGenerate = () => {
-    const cfg: PlannerConfig = { zone, startDate, endDate, startHour, endHour, nightLife, nightEndHour };
+    // Derive Category[] from selected interest groups
+    const categories: Category[] = INTEREST_GROUPS
+      .filter((g) => activeGroups.has(g.id))
+      .flatMap((g) => g.categories);
+
+    const cfg: PlannerConfig = {
+      zone, startDate, endDate, startHour, endHour,
+      nightLife, nightEndHour,
+      categories: categories.length > 0 ? categories : ALL_NON_MUSEUM_CATEGORIES,
+      budgetLevel,
+    };
     generate(cfg);
   };
 
@@ -219,6 +252,68 @@ export default function PlannerPanel({ pois, onClose, onSelectPOI }: Props) {
               ⚠️ {error}
             </div>
           )}
+
+          {/* Interests */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              🎯 Interests
+            </label>
+            <p className="text-[11px] text-gray-500">⭐ Iconic landmarks always included</p>
+            <div className="flex flex-wrap gap-2">
+              {INTEREST_GROUPS.map((g) => {
+                const active = activeGroups.has(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveGroups((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(g.id)) next.delete(g.id);
+                        else next.add(g.id);
+                        return next;
+                      });
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      active
+                        ? 'bg-ocean-500/20 border-ocean-400/50 text-ocean-300'
+                        : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'
+                    }`}
+                  >
+                    <span>{g.emoji}</span>
+                    <span>{g.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Budget */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              💳 Budget
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {BUDGET_OPTIONS.map((opt) => (
+                <button
+                  key={opt.level}
+                  type="button"
+                  onClick={() => setBudgetLevel(opt.level)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
+                    budgetLevel === opt.level
+                      ? opt.color
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:border-white/20'
+                  }`}
+                >
+                  <span className="text-base">{opt.emoji}</span>
+                  <div>
+                    <p className="text-xs font-semibold leading-tight">{opt.label}</p>
+                    <p className="text-[10px] opacity-70">{opt.sublabel}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Night Planning Toggle */}
           <div className="space-y-2">
