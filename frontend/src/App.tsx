@@ -11,12 +11,14 @@ import GPSButton from './components/GPSButton';
 import NotificationToast from './components/NotificationToast';
 import PlannerPanel from './components/PlannerPanel';
 import ProfileModal from './components/ProfileModal';
+import EventsPanel from './components/EventsPanel';
 
 export default function App() {
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
 
   const { gps, startTracking, stopTracking, setFollowing } = useGPS();
   const {
@@ -140,6 +142,19 @@ export default function App() {
               </span>
             </button>
 
+            {/* Events button */}
+            <button
+              onClick={() => setEventsOpen(v => !v)}
+              title="Events Today"
+              className={`flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
+                eventsOpen
+                  ? 'glass bg-ocean-500/20 border-ocean-400 text-ocean-300'
+                  : 'glass border-white/10 text-white hover:border-ocean-400'
+              }`}
+            >
+              <span className="text-base">🎉</span>
+            </button>
+
             {/* Trip Planner button */}
             <button
               onClick={() => setPlannerOpen(v => !v)}
@@ -227,6 +242,21 @@ export default function App() {
                 onSavePlan={handleSavePlan}
                 isSavingPlan={profileHook.isSaving}
               />
+            </div>
+          </>
+        )}
+
+        {/* ── Events panel ───────────────────────────────────────────── */}
+        {eventsOpen && (
+          <>
+            {/* Desktop: fixed right panel */}
+            <div className="hidden md:block absolute top-0 right-0 bottom-0 w-96 lg:w-[26rem] z-[1002] overflow-y-auto shadow-2xl">
+              <EventsPanel onClose={() => setEventsOpen(false)} />
+            </div>
+
+            {/* Mobile: full-screen overlay */}
+            <div className="md:hidden fixed inset-0 z-[3100] flex flex-col">
+              <EventsPanel onClose={() => setEventsOpen(false)} />
             </div>
           </>
         )}
