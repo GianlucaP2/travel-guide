@@ -15,6 +15,7 @@ import { GPSState } from '../types';
 import { useHwy1Route } from '../hooks/useHwy1Route';
 import { useWikipediaData } from '../hooks/useWikipediaData';
 import { CATEGORY_EMOJI, tierColor } from '../utils/markers';
+import { LA_EVENTS, STATUS_CONFIG, type LAEvent } from '../data/events';
 
 // ── Fix Leaflet default icon paths ──────────────────────────────────────────
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -70,6 +71,27 @@ function createPOIIcon(poi: POI, selected: boolean) {
   });
 }
 
+// ── Create DivIcon for an event marker ───────────────────────────────────────
+function createEventIcon(ev: LAEvent, selected: boolean) {
+  const emoji = ev.tags.includes('dj') ? '🎵'
+    : ev.tags.includes('live-music') ? '🎸'
+    : ev.tags.includes('comedy')     ? '😂'
+    : ev.tags.includes('beer-fest')  ? '🍺'
+    : ev.tags.includes('drag')       ? '👑'
+    : ev.tags.includes('cultural')   ? '🌍'
+    : ev.tags.includes('wrestling')  ? '🥊'
+    : ev.tags.includes('brunch')     ? '🥂'
+    : '🎉';
+  const pulse = (ev.status === 'almost-full' || ev.status === 'sales-end-soon') ? ' event-pulse' : '';
+  const sel = selected ? ' event-selected' : '';
+  return L.divIcon({
+    html: `<div class="event-marker${sel}${pulse}"><div class="event-pin">${emoji}</div><div class="event-time">${ev.time}</div></div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+    className: '',
+  });
+}
+
 // ── GPS dot icon ─────────────────────────────────────────────────────────────
 const GPS_ICON = L.divIcon({
   html: `<div class="gps-marker-outer"><div class="gps-marker-ring"></div><div class="gps-marker-dot"></div></div>`,
@@ -85,9 +107,18 @@ interface MapViewProps {
   onSelectPOI: (poi: POI | null) => void;
   gps: GPSState;
   onStopFollowing: () => void;
+  showEvents?: boolean;
+  selectedEventId?: string | null;
+  onSelectEvent?: (ev: LAEvent | null) => void;
 }
 
-export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFollowing }: MapViewProps) {
+export default function MapView({
+  pois, selectedPOI, onSelectPOI,
+  gps, onStopFollowing,
+  showEvents = true,
+  selectedEventId = null,
+  onSelectEvent,
+}: MapViewProps) {
   const { route, loading } = useHwy1Route();
 
   return (
@@ -135,6 +166,23 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
         </Marker>
       ))}
 
+      {/* Event markers — today's LA events */}
+      {showEvents && LA_EVENTS.map(ev => (
+        <Marker
+          key={`ev-${ev.id}`}
+          position={[ev.lat, ev.lng]}
+          icon={createEventIcon(ev, selectedEventId === ev.id)}
+          zIndexOffset={3000}
+          eventHandlers={{
+            click: () => onSelectEvent?.(ev),
+          }}
+        >
+          <Popup minWidth={220} maxWidth={300}>
+            <EventPopup ev={ev} />
+          </Popup>
+        </Marker>
+      ))}
+
       {/* GPS position */}
       {gps.lat !== null && gps.lng !== null && (
         <>
@@ -152,6 +200,40 @@ export default function MapView({ pois, selectedPOI, onSelectPOI, gps, onStopFol
       <MapFollower gps={gps} onStopFollowing={onStopFollowing} />
       <PanTo poi={selectedPOI} onStopFollowing={onStopFollowing} />
     </MapContainer>
+  );
+}
+
+// ── Event popup card ─────────────────────────────────────────────────────────
+function EventPopup({ ev }: { ev: LAEvent }) {
+  const statusCfg = STATUS_CONFIG[ev.status];
+  return (
+    <div className="min-w-[220px] max-w-[300px]">
+      <div className="p-3">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-xs font-bold text-blue-400 tabular-nums">{ev.time}</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${statusCfg.color}`}>
+            {statusCfg.label}
+          </span>
+        </div>
+        <div className="font-semibold text-sm leading-snug text-white mb-1">{ev.name}</div>
+        <div className="text-xs text-gray-400 mb-1">📍 {ev.venue} · {ev.area}</div>
+        <div className="text-xs font-semibold mb-2" style={{ color: ev.isFree ? '#4ade80' : '#d1d5db' }}>
+          {ev.isFree ? '🆓 Free' : ev.price}
+        </div>
+        {ev.description && (
+          <p className="text-xs text-gray-400 leading-relaxed mb-2 line-clamp-2">{ev.description}</p>
+        )}
+        <a
+          href={ev.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center text-xs py-1.5 rounded-lg font-medium transition-colors"
+          style={{ background: '#0ea5e933', color: '#38bdf8', border: '1px solid #0ea5e966' }}
+        >
+          Get tickets →
+        </a>
+      </div>
+    </div>
   );
 }
 
